@@ -1,0 +1,53 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: jobs
+      POSTGRES_PASSWORD: jobs
+      POSTGRES_DB: jobscraper
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U jobs -d jobscraper"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Applies DB migrations, then exits. Other services wait for it to succeed.
+  migrate:
+    build: ./backend
+    command: alembic upgrade head
+    environment:
+      DATABASE_URL: postgresql+asyncpg://jobs:jobs@db:5432/jobscraper
+    depends_on:
+      db:
+        condition: service_healthy
+
+  api:
+    build: ./backend
+    environment:
+      DATABASE_URL: postgresql+asyncpg://jobs:jobs@db:5432/jobscraper
+      CORS_ORIGINS: http://localhost:3000
+      ENVIRONMENT: production
+      AUTO_CREATE_TABLES: "false"
+    ports:
+      - "8000:8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  # Background crawler: crawls all active companies every 15 minutes.
+  worker:
+    build: ./backend
+    command: python -m app.worker.run loop 900
+    environment:
+      DATABASE_URL: postgresql+asyncpg://jobs:jobs@db:5432/jobscraper
+      AUTO_CREATE_TABLES: "false"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+volumes:
+  pgdata:

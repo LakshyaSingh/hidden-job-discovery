@@ -1,0 +1,122 @@
+"""End-to-end ingest/dedup tests against a real SQLite database.
+
+Exercises the ORM + ingest service together: newness windows, the
+source-of-truth posting date across a cross-source duplicate, change detection,
+and removal detection.
+"""
+import os
+from datetime import datetime, timedelta, timezone
+
+import pytest
+import pytest_asyncio
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+from app.database import Base
+from app.models import ATSProvider, Company, Job, JobStatus
+from app.scrapers.base import NormalizedJob
+from app.services.ingest import ingest_jobs
+
+
+@pytest_asyncio.fixture
+async def session(tmp_path):
+    db_path = tmp_path / "test.db"
+    engine = create_async_engine(f"sqlite+aiosqlite:///{db_path}")
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    maker = async_sessionmaker(engine, expire_on_commit=False)
+    async with maker() as s:
+        yield s
+    await engine.dispose()
+
+
+def _now():
+    return datetime.now(timezone.utc)
+
+
+async def _company(session, name="Stripe", token="stripe"):
+    c = Company(
+        name=name, slug=token, ats_provider=ATSProvider.greenhouse,
+        ats_identifier=token, careers_url="https://x/careers",
+    )
+    session.add(c)
+    await session.commit()
+    await session.refresh(c)
+    return c
+
+
+@pytest.mark.asyncio
+async def test_new_job_flagged_and_persisted(session):
+    company = await _company(session)
+    jobs = [
+        NormalizedJob(
+            external_id="1", title="Product Manager", apply_url="https://x/1",
+            company_name="Stripe", location_raw="Remote, US",
+            original_posted_at=_now(),
+        )
+    ]
+    stats = await ingest_jobs(session, company, jobs)
+    assert stats.new == 1
+    row = (await session.execute(select(Job))).scalar_one()
+    assert row.is_new is True
+    assert row.status == JobStatus.open
+    assert row.title_normalized == "product manager"
+
+
+@pytest.mark.asyncio
+async def test_old_posting_is_not_new(session):
+    company = await _company(session)
+    jobs = [
+        NormalizedJob(
+            external_id="2", title="Data Analyst", apply_url="https://x/2",
+            company_name="Stripe", location_raw="NYC",
+            original_posted_at=_now() - timedelta(days=30),
+        )
+    ]
+    await ingest_jobs(session, company, jobs)
+    row = (await session.execute(select(Job))).scalar_one()
+    assert row.is_new is False  # 30 days old → not new despite first discovery now
+
+
+@pytest.mark.asyncio
+async def test_source_of_truth_keeps_oldest_date(session):
+    """A cross-source duplicate (same fingerprint) reposted with a FRESH date must
+    not override the older authoritative date — the old job stays old."""
+    company = await _company(session)
+    old = _now() - timedelta(days=20)
+    await ingest_jobs(session, company, [
+        NormalizedJob(external_id="10", title="Sr. PM", apply_url="https://x/10",
+                      company_name="Stripe", location_raw="Remote",
+                      original_posted_at=old)
+    ])
+    # Second "source": same company+title+location => same fingerprint, but a
+    # brand-new posting date (as an aggregator repost would claim).
+    company2 = await _company(session, name="Stripe", token="stripe-lever")
+    await ingest_jobs(session, company2, [
+        NormalizedJob(external_id="99", title="Senior Product Manager",
+                      apply_url="https://x/99", company_name="Stripe",
+                      location_raw="Remote, US", original_posted_at=_now())
+    ])
+    rows = (await session.execute(select(Job).where(Job.external_id == "99"))).scalars().all()
+    dup = rows[0]
+    # It inherited the older authoritative date and is therefore NOT new.
+    assert dup.original_posted_at.replace(tzinfo=timezone.utc) <= old + timedelta(seconds=1)
+    assert dup.is_new is False
+
+
+@pytest.mark.asyncio
+async def test_unchanged_then_removed(session):
+    company = await _company(session)
+    job = NormalizedJob(external_id="5", title="PM", apply_url="https://x/5",
+                        company_name="Stripe", location_raw="Remote",
+                        original_posted_at=_now())
+    s1 = await ingest_jobs(session, company, [job])
+    assert s1.new == 1
+    # Re-crawl, identical content → unchanged, not new insert.
+    s2 = await ingest_jobs(session, company, [job])
+    assert s2.new == 0 and s2.unchanged == 1
+    # Next sweep returns nothing → the job is closed (removal detection).
+    s3 = await ingest_jobs(session, company, [])
+    assert s3.closed == 1
+    row = (await session.execute(select(Job))).scalar_one()
+    assert row.status == JobStatus.closed

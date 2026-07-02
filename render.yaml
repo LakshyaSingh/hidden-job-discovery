@@ -1,0 +1,61 @@
+# Render Blueprint — provisions Postgres + FastAPI API + crawler cron.
+# On Render: New → Blueprint → connect this repo. Render reads this file.
+#
+# Free-tier notes (read before deploying):
+#   * Postgres "free" has size/retention limits — upgrade for anything durable.
+#   * Cron jobs require a paid instance type (no free cron on Render). The
+#     crawler below uses "starter". To stay 100% free instead, delete the cron
+#     service and hit the API's /crawl endpoint from a free external scheduler.
+#   * The free web service sleeps after ~15 min idle and cold-starts on request.
+#   * Migrations run at container start (works on free tier, where the paid-only
+#     preDeployCommand is unavailable).
+
+databases:
+  - name: jobscraper-db
+    databaseName: jobscraper
+    user: jobs
+    plan: free
+
+services:
+  - type: web
+    name: jobscraper-api
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: alembic upgrade head && gunicorn app.main:app -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --workers 2
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: jobscraper-db
+          property: connectionString
+      - key: AUTO_CREATE_TABLES
+        value: "false"
+      - key: ENVIRONMENT
+        value: production
+      - key: PYTHON_VERSION
+        value: "3.12.6"
+      # Set to your Vercel URL after the frontend deploys (e.g.
+      # https://your-app.vercel.app). Left unset here on purpose.
+      - key: CORS_ORIGINS
+        sync: false
+
+  - type: cron
+    name: jobscraper-crawler
+    runtime: python
+    plan: starter
+    rootDir: backend
+    schedule: "*/15 * * * *"   # crawl every 15 minutes
+    buildCommand: pip install -r requirements.txt
+    startCommand: alembic upgrade head && python -m app.worker.run seed && python -m app.worker.run crawl
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: jobscraper-db
+          property: connectionString
+      - key: AUTO_CREATE_TABLES
+        value: "false"
+      - key: PYTHON_VERSION
+        value: "3.12.6"
