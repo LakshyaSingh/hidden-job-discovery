@@ -22,6 +22,9 @@ export default function Dashboard() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [crawling, setCrawling] = useState(false);
+  // Separate input state so typing is instant; the query only fires after a
+  // short pause (debounce) instead of once per keystroke.
+  const [searchText, setSearchText] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -40,6 +43,15 @@ export default function Dashboard() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // Debounce the search box → filters.q (300ms after the last keystroke).
+  useEffect(() => {
+    const id = setTimeout(
+      () => set("q", searchText.trim() || undefined),
+      300,
+    );
+    return () => clearTimeout(id);
+  }, [searchText]);
 
   function set<K extends keyof JobFilters>(key: K, value: JobFilters[K]) {
     setFilters((f) => ({ ...f, [key]: value }));
@@ -108,8 +120,8 @@ export default function Dashboard() {
           type="text"
           aria-label="Search title or keyword"
           placeholder="Search a title or keyword, e.g. product manager"
-          value={filters.q ?? ""}
-          onChange={(e) => set("q", e.target.value || undefined)}
+          value={searchText}
+          onChange={(e) => setSearchText(e.target.value)}
         />
 
         <div className="toolbar-row">
