@@ -4,30 +4,14 @@ Exercises the ORM + ingest service together: newness windows, the
 source-of-truth posting date across a cross-source duplicate, change detection,
 and removal detection.
 """
-import os
 from datetime import datetime, timedelta, timezone
 
 import pytest
-import pytest_asyncio
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from app.database import Base
 from app.models import ATSProvider, Company, Job, JobStatus
 from app.scrapers.base import NormalizedJob
 from app.services.ingest import ingest_jobs
-
-
-@pytest_asyncio.fixture
-async def session(tmp_path):
-    db_path = tmp_path / "test.db"
-    engine = create_async_engine(f"sqlite+aiosqlite:///{db_path}")
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as s:
-        yield s
-    await engine.dispose()
 
 
 def _now():

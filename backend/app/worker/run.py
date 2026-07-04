@@ -2,6 +2,7 @@
 
 Usage:
     python -m app.worker.run seed      # insert a few real Greenhouse boards
+    python -m app.worker.run discover  # probe candidate slugs, add live boards
     python -m app.worker.run crawl     # crawl all active companies once
     python -m app.worker.run loop 900  # crawl every 900s (Phase-1 scheduler)
 """
@@ -18,6 +19,7 @@ from app.config import get_settings
 from app.database import Base, SessionLocal, engine
 from app.models import ATSProvider, Company
 from app.services.crawl import crawl_all
+from app.services.discovery import discover_companies
 
 logger = logging.getLogger("worker")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s")
@@ -83,12 +85,24 @@ async def crawl_loop(interval: int) -> None:
         await asyncio.sleep(interval)
 
 
+async def discover_once() -> None:
+    await init_db()
+    async with SessionLocal() as session:
+        stats = await discover_companies(session)
+        logger.info(
+            "discovery complete: probed=%d found=%d added=%d",
+            stats["probed"], stats["found"], stats["added"],
+        )
+
+
 def main() -> None:
     cmd = sys.argv[1] if len(sys.argv) > 1 else "crawl"
     if cmd == "seed":
         asyncio.run(seed())
     elif cmd == "crawl":
         asyncio.run(crawl_once())
+    elif cmd == "discover":
+        asyncio.run(discover_once())
     elif cmd == "loop":
         interval = int(sys.argv[2]) if len(sys.argv) > 2 else 900
         asyncio.run(crawl_loop(interval))
