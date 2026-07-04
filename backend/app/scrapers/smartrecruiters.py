@@ -52,7 +52,13 @@ class SmartRecruitersScraper(BaseScraper):
             if not postings:
                 break
             for j in postings:
-                location_raw, location_type = _location(j.get("location") or {})
+                loc = j.get("location") or {}
+                location_raw, location_type = _location(loc)
+                # SmartRecruiters gives a structured country code (e.g. "us").
+                country = (loc.get("country") or "").lower()
+                is_us = True if country in ("us", "usa") else (
+                    False if country else extract.is_us_location(location_raw)
+                )
                 emp = (j.get("typeOfEmployment") or {}).get("label")
                 results.append(
                     NormalizedJob(
@@ -64,6 +70,7 @@ class SmartRecruitersScraper(BaseScraper):
                         company_name=company.name,
                         location_raw=location_raw,
                         location_type=location_type,
+                        is_us=is_us,
                         original_posted_at=extract.parse_iso_datetime(
                             j.get("releasedDate")
                         ),

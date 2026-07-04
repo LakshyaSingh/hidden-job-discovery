@@ -37,6 +37,8 @@ class NormalizedJob:
 
     location_raw: str | None = None
     location_type: LocationType = LocationType.unknown
+    # True/False when the scraper knows the country; None → let ingest infer it.
+    is_us: bool | None = None
     original_posted_at: datetime | None = None  # authoritative publish date if known
     employment_type: str | None = None
     salary_min: float | None = None

@@ -106,6 +106,17 @@ async def ingest_jobs(
             )
         ).scalar_one_or_none()
 
+        # Country (scraper knows best; otherwise infer from the location text).
+        is_us = (
+            nj.is_us if nj.is_us is not None
+            else extract.is_us_location(nj.location_raw)
+        )
+        # Experience: prefer the scraper's parsed range; fall back to seniority
+        # implied by the title so filters aren't defeated by missing data.
+        min_exp, max_exp = nj.min_experience, nj.max_experience
+        if min_exp is None and max_exp is None:
+            min_exp, max_exp = extract.infer_experience_from_title(nj.title)
+
         if existing is None:
             posted_at, date_source = await _authoritative_posted_at(
                 session, fingerprint, nj.original_posted_at
@@ -123,6 +134,7 @@ async def ingest_jobs(
                     title_normalized=extract.normalize_title(nj.title),
                     location_raw=nj.location_raw,
                     location_type=nj.location_type,
+                    is_us=is_us,
                     ats_provider=company.ats_provider,
                     apply_url=nj.apply_url,
                     careers_url=company.careers_url,
@@ -131,8 +143,8 @@ async def ingest_jobs(
                     date_source=date_source,
                     last_checked_at=now,
                     last_seen_at=now,
-                    min_experience=nj.min_experience,
-                    max_experience=nj.max_experience,
+                    min_experience=min_exp,
+                    max_experience=max_exp,
                     employment_type=nj.employment_type,
                     salary_min=nj.salary_min,
                     salary_max=nj.salary_max,
@@ -152,6 +164,11 @@ async def ingest_jobs(
         existing.last_checked_at = now
         existing.last_seen_at = now
         existing.status = JobStatus.open
+        # Backfill country + experience on every sighting (cheap; also upgrades
+        # rows created before these fields existed).
+        existing.is_us = is_us
+        if existing.min_experience is None and existing.max_experience is None:
+            existing.min_experience, existing.max_experience = min_exp, max_exp
         # Expire the is_new flag once outside the window.
         if existing.is_new:
             effective_date = _aware(
@@ -172,8 +189,8 @@ async def ingest_jobs(
         existing.apply_url = nj.apply_url
         existing.description = nj.description
         existing.skills = nj.skills
-        existing.min_experience = nj.min_experience
-        existing.max_experience = nj.max_experience
+        existing.min_experience = min_exp
+        existing.max_experience = max_exp
         existing.salary_min = nj.salary_min
         existing.salary_max = nj.salary_max
         existing.content_hash = chash
@@ -181,7 +198,9 @@ async def ingest_jobs(
         stats.updated += 1
 
     # Removal detection: any previously-open job for this company not seen this
-    # sweep is now closed.
+    # sweep is now closed. Guard against a partial/failed fetch (a transient
+    # error or rate-limit) wiping the board: if this run saw far fewer jobs than
+    # we currently have open, skip closing and keep the existing rows.
     open_jobs = (
         await session.execute(
             select(Job).where(
@@ -189,11 +208,20 @@ async def ingest_jobs(
             )
         )
     ).scalars().all()
-    for job in open_jobs:
-        if job.external_id not in seen_external_ids:
-            job.status = JobStatus.closed
-            job.is_new = False
-            stats.closed += 1
+    open_count = len(open_jobs)
+    suspicious = stats.seen == 0 or (open_count > 4 and stats.seen < open_count * 0.5)
+    if suspicious:
+        logger.warning(
+            "ingest %s: fetched only %d job(s) but %d are open — skipping "
+            "stale-close (suspected partial fetch)",
+            company.name, stats.seen, open_count,
+        )
+    else:
+        for job in open_jobs:
+            if job.external_id not in seen_external_ids:
+                job.status = JobStatus.closed
+                job.is_new = False
+                stats.closed += 1
 
     await session.commit()
     logger.info(

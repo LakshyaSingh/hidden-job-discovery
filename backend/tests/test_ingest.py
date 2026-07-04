@@ -115,8 +115,30 @@ async def test_unchanged_then_removed(session):
     # Re-crawl, identical content → unchanged, not new insert.
     s2 = await ingest_jobs(session, company, [job])
     assert s2.new == 0 and s2.unchanged == 1
-    # Next sweep returns nothing → the job is closed (removal detection).
-    s3 = await ingest_jobs(session, company, [])
+    # A healthy sweep that still returns jobs but omits #5 → #5 is closed.
+    other = NormalizedJob(external_id="6", title="PM Two", apply_url="https://x/6",
+                          company_name="Stripe", location_raw="Remote",
+                          original_posted_at=_now())
+    s3 = await ingest_jobs(session, company, [other])
     assert s3.closed == 1
-    row = (await session.execute(select(Job))).scalar_one()
-    assert row.status == JobStatus.closed
+    row5 = (
+        await session.execute(select(Job).where(Job.external_id == "5"))
+    ).scalar_one()
+    assert row5.status == JobStatus.closed
+
+
+@pytest.mark.asyncio
+async def test_empty_fetch_does_not_close(session):
+    """A fetch returning 0 jobs is treated as a suspected partial/failed fetch
+    and must NOT close the board (this was causing count fluctuation)."""
+    company = await _company(session)
+    job = NormalizedJob(external_id="7", title="PM", apply_url="https://x/7",
+                        company_name="Stripe", location_raw="Remote",
+                        original_posted_at=_now())
+    await ingest_jobs(session, company, [job])
+    s = await ingest_jobs(session, company, [])
+    assert s.closed == 0
+    row = (
+        await session.execute(select(Job).where(Job.external_id == "7"))
+    ).scalar_one()
+    assert row.status == JobStatus.open

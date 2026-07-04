@@ -42,6 +42,7 @@ async def list_jobs(
     max_experience: int | None = None,
     location_type: LocationType | None = None,
     provider: ATSProvider | None = None,
+    us_only: bool = True,
     posted_within: Literal["24h", "48h", "7d"] | None = None,
     status: JobStatus = JobStatus.open,
     only_new: bool = False,
@@ -93,6 +94,10 @@ async def list_jobs(
         stmt = stmt.where(Job.location_type == location_type)
     if provider is not None:
         stmt = stmt.where(Job.ats_provider == provider)
+    # US-only by default (the product's scope). Excludes jobs known to be
+    # non-US and those whose country could not be determined.
+    if us_only:
+        stmt = stmt.where(Job.is_us.is_(True))
 
     if posted_within is not None:
         cutoff = now - timedelta(hours=_POSTED_WINDOWS[posted_within])

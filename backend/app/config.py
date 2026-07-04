@@ -45,6 +45,10 @@ class Settings(BaseSettings):
     # How long a freshly discovered job stays flagged is_new (hours).
     new_job_window_hours: int = 48
 
+    # Workday has no listing-level detail, so we fetch each job's detail page.
+    # Cap how many per company per crawl to bound request volume.
+    workday_max_jobs: int = 200
+
     # Per-domain politeness: minimum seconds between requests to the same host.
     request_min_interval_seconds: float = 0.5
     request_timeout_seconds: float = 20.0

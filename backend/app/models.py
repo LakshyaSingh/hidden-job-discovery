@@ -102,6 +102,8 @@ class Job(Base):
     location_type: Mapped[LocationType] = mapped_column(
         Enum(LocationType), default=LocationType.unknown, nullable=False
     )
+    # True/False when known, NULL when the country could not be determined.
+    is_us: Mapped[Optional[bool]] = mapped_column(Boolean)
 
     ats_provider: Mapped[ATSProvider] = mapped_column(Enum(ATSProvider), nullable=False)
     apply_url: Mapped[str] = mapped_column(String(1024), nullable=False)
@@ -156,6 +158,7 @@ class Job(Base):
         Index("ix_jobs_original_posted_at", "original_posted_at"),
         Index("ix_jobs_title_normalized", "title_normalized"),
         Index("ix_jobs_status", "status"),
+        Index("ix_jobs_is_us", "is_us"),
     )
 
 
