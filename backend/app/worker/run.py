@@ -18,6 +18,7 @@ from sqlalchemy.exc import IntegrityError
 from app.config import get_settings
 from app.database import Base, SessionLocal, engine
 from app.models import ATSProvider, Company
+from app.services.aggregate import run_themuse
 from app.services.crawl import crawl_all
 from app.services.discovery import discover_companies
 
@@ -95,6 +96,16 @@ async def discover_once() -> None:
         )
 
 
+async def aggregate_once() -> None:
+    await init_db()
+    async with SessionLocal() as session:
+        stats = await run_themuse(session)
+        logger.info(
+            "aggregate complete: employers=%d jobs=%d new=%d",
+            stats["employers"], stats["jobs"], stats["new"],
+        )
+
+
 def main() -> None:
     cmd = sys.argv[1] if len(sys.argv) > 1 else "crawl"
     if cmd == "seed":
@@ -103,6 +114,8 @@ def main() -> None:
         asyncio.run(crawl_once())
     elif cmd == "discover":
         asyncio.run(discover_once())
+    elif cmd == "aggregate":
+        asyncio.run(aggregate_once())
     elif cmd == "loop":
         interval = int(sys.argv[2]) if len(sys.argv) > 2 else 900
         asyncio.run(crawl_loop(interval))

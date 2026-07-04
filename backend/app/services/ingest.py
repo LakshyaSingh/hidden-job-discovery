@@ -76,9 +76,16 @@ async def _authoritative_posted_at(
 
 
 async def ingest_jobs(
-    session: AsyncSession, company: Company, jobs: list[NormalizedJob]
+    session: AsyncSession,
+    company: Company,
+    jobs: list[NormalizedJob],
+    *,
+    close_stale: bool = True,
 ) -> IngestStats:
-    """Upsert a company's current postings and close ones that vanished."""
+    """Upsert a company's current postings and close ones that vanished.
+
+    close_stale=False for aggregator sources, which fetch only a slice of a
+    company's jobs per run (so "not seen this run" doesn't mean "removed")."""
     stats = IngestStats(seen=len(jobs))
     now = _now()
     new_cutoff = now - timedelta(hours=settings.new_job_window_hours)
@@ -210,7 +217,9 @@ async def ingest_jobs(
     ).scalars().all()
     open_count = len(open_jobs)
     suspicious = stats.seen == 0 or (open_count > 4 and stats.seen < open_count * 0.5)
-    if suspicious:
+    if not close_stale:
+        pass  # aggregator slice — never infer removal from a partial view
+    elif suspicious:
         logger.warning(
             "ingest %s: fetched only %d job(s) but %d are open — skipping "
             "stale-close (suspected partial fetch)",

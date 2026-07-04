@@ -32,5 +32,7 @@ jobs:
         run: alembic upgrade head
       - name: Discover companies
         run: python -m app.worker.run discover
+      - name: Aggregate (The Muse broad US feed)
+        run: python -m app.worker.run aggregate
       - name: Crawl (populate newly-added companies)
         run: python -m app.worker.run crawl

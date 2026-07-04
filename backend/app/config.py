@@ -49,6 +49,10 @@ class Settings(BaseSettings):
     # Cap how many per company per crawl to bound request volume.
     workday_max_jobs: int = 200
 
+    # The Muse aggregator: pages to pull per run (20 jobs/page). Bounds volume
+    # against the free Postgres size limit.
+    themuse_max_pages: int = 60
+
     # Per-domain politeness: minimum seconds between requests to the same host.
     request_min_interval_seconds: float = 0.5
     request_timeout_seconds: float = 20.0

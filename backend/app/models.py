@@ -42,6 +42,8 @@ class ATSProvider(str, enum.Enum):
     workday = "workday"
     oracle = "oracle"
     successfactors = "successfactors"
+    # Aggregator sources (not ATSes): jobs ingested from a broad job feed.
+    themuse = "themuse"
 
 
 class LocationType(str, enum.Enum):
