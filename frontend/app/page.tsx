@@ -71,141 +71,176 @@ export default function Dashboard() {
   );
 
   return (
-    <div className="container">
-      <header className="top">
-        <div>
-          <h1>Hidden Job Discovery</h1>
-          <div className="subtitle">
-            New roles straight from company career portals — before the boards.
-          </div>
+    <div className="container fade-in">
+      <header className="topbar">
+        <span className="wordmark">Hidden Job Discovery</span>
+        <div className="topbar-actions">
+          <button className="btn ghost" onClick={runCrawl} disabled={crawling}>
+            {crawling ? "Crawling…" : "Run crawl"}
+          </button>
         </div>
-        <button className="btn" onClick={runCrawl} disabled={crawling}>
-          {crawling ? "Crawling…" : "Run crawl"}
-        </button>
       </header>
 
-      <div className="filters">
+      <section className="masthead">
+        <div className="masthead-lead">
+          <span className="eyebrow">Live from company career portals</span>
+          <h1 className="display">
+            New roles,
+            <br />
+            before the boards.
+          </h1>
+          <p className="lede">
+            Jobs pulled straight from company ATS portals, surfaced before they
+            reach LinkedIn or Indeed.
+          </p>
+        </div>
+        <div className="masthead-stat">
+          <span className="stat-num">
+            {loading ? "…" : total.toLocaleString()}
+          </span>
+          <span className="eyebrow">{total === 1 ? "role matched" : "roles matched"}</span>
+        </div>
+      </section>
+
+      <div className="toolbar">
         <input
+          className="control search"
           type="text"
-          placeholder="Title or keyword (e.g. product manager)"
+          aria-label="Search title or keyword"
+          placeholder="Search a title or keyword, e.g. product manager"
           value={filters.q ?? ""}
           onChange={(e) => set("q", e.target.value || undefined)}
         />
 
-        <label>
-          Exp:
-          <input
-            className="exp"
-            type="number"
-            min={0}
-            placeholder="min"
-            value={filters.min_experience ?? ""}
+        <div className="toolbar-row">
+          <div className="field">
+            <span className="eyebrow">Experience</span>
+            <div className="exp-group">
+              <input
+                className="control exp"
+                type="number"
+                min={0}
+                placeholder="min"
+                value={filters.min_experience ?? ""}
+                onChange={(e) =>
+                  set(
+                    "min_experience",
+                    e.target.value ? Number(e.target.value) : undefined,
+                  )
+                }
+              />
+              <span className="eyebrow">to</span>
+              <input
+                className="control exp"
+                type="number"
+                min={0}
+                placeholder="max"
+                value={filters.max_experience ?? ""}
+                onChange={(e) =>
+                  set(
+                    "max_experience",
+                    e.target.value ? Number(e.target.value) : undefined,
+                  )
+                }
+              />
+            </div>
+          </div>
+
+          <select
+            className="control"
+            aria-label="Location"
+            value={filters.location_type ?? ""}
             onChange={(e) =>
               set(
-                "min_experience",
-                e.target.value ? Number(e.target.value) : undefined,
+                "location_type",
+                (e.target.value || undefined) as LocationType,
               )
             }
-          />
-          –
-          <input
-            className="exp"
-            type="number"
-            min={0}
-            placeholder="max"
-            value={filters.max_experience ?? ""}
+          >
+            <option value="">Any location</option>
+            {LOCATION_TYPES.map((l) => (
+              <option key={l} value={l}>
+                {l}
+              </option>
+            ))}
+          </select>
+
+          <select
+            className="control"
+            aria-label="Posted within"
+            value={filters.posted_within ?? ""}
             onChange={(e) =>
               set(
-                "max_experience",
-                e.target.value ? Number(e.target.value) : undefined,
+                "posted_within",
+                (e.target.value || undefined) as JobFilters["posted_within"],
               )
             }
-          />
-        </label>
+          >
+            <option value="">Any time</option>
+            <option value="24h">Last 24 hours</option>
+            <option value="48h">Last 48 hours</option>
+            <option value="7d">Last 7 days</option>
+          </select>
 
-        <select
-          value={filters.location_type ?? ""}
-          onChange={(e) =>
-            set("location_type", (e.target.value || undefined) as LocationType)
-          }
-        >
-          <option value="">Any location</option>
-          {LOCATION_TYPES.map((l) => (
-            <option key={l} value={l}>
-              {l}
-            </option>
-          ))}
-        </select>
+          <select
+            className="control"
+            aria-label="Sort by"
+            value={filters.sort}
+            onChange={(e) => set("sort", e.target.value as JobFilters["sort"])}
+          >
+            <option value="posted">Sort: posted</option>
+            <option value="discovered">Sort: discovered</option>
+            <option value="title">Sort: title</option>
+            <option value="company">Sort: company</option>
+          </select>
 
-        <select
-          value={filters.posted_within ?? ""}
-          onChange={(e) =>
-            set(
-              "posted_within",
-              (e.target.value || undefined) as JobFilters["posted_within"],
-            )
-          }
-        >
-          <option value="">Any time</option>
-          <option value="24h">Last 24 hours</option>
-          <option value="48h">Last 48 hours</option>
-          <option value="7d">Last 7 days</option>
-        </select>
+          <span className="spacer" />
 
-        <select
-          value={filters.sort}
-          onChange={(e) => set("sort", e.target.value as JobFilters["sort"])}
-        >
-          <option value="posted">Sort: posted</option>
-          <option value="discovered">Sort: discovered</option>
-          <option value="title">Sort: title</option>
-          <option value="company">Sort: company</option>
-        </select>
-
-        <span
-          className={`chip ${filters.only_new ? "active" : ""}`}
-          onClick={() => toggleBool("only_new")}
-        >
-          New only
-        </span>
-        <span
-          className={`chip ${filters.discovered_today ? "active" : ""}`}
-          onClick={() => toggleBool("discovered_today")}
-        >
-          Discovered today
-        </span>
-        <span
-          className={`chip ${filters.bookmarked ? "active" : ""}`}
-          onClick={() => toggleBool("bookmarked")}
-        >
-          Bookmarked
-        </span>
-      </div>
-
-      <div className="meta-row">
-        {loading ? "Loading…" : `${total} job${total === 1 ? "" : "s"} match`}
-      </div>
-
-      {!loading && jobs.length === 0 && (
-        <div className="empty">
-          {hasFilters ? (
-            <>
-              No jobs match your filters. Try setting the date to{" "}
-              <b>Any time</b> or <b>Last 7 days</b>, clearing the search, or
-              widening the experience range.
-            </>
-          ) : (
-            <>
-              No jobs yet — the crawler runs automatically every 30&nbsp;minutes.
-              Check back shortly, or click <b>Run crawl</b>.
-            </>
-          )}
+          <div className="chips">
+            <span
+              className={`chip ${filters.only_new ? "active" : ""}`}
+              onClick={() => toggleBool("only_new")}
+            >
+              New only
+            </span>
+            <span
+              className={`chip ${filters.discovered_today ? "active" : ""}`}
+              onClick={() => toggleBool("discovered_today")}
+            >
+              Discovered today
+            </span>
+            <span
+              className={`chip ${filters.bookmarked ? "active" : ""}`}
+              onClick={() => toggleBool("bookmarked")}
+            >
+              Bookmarked
+            </span>
+          </div>
         </div>
-      )}
+      </div>
 
-      {jobs.map((job) => (
-        <JobCard key={job.id} job={job} onChange={load} />
-      ))}
+      <div className="results">
+        {!loading && jobs.length === 0 && (
+          <div className="empty">
+            {hasFilters ? (
+              <>
+                No jobs match your filters. Try setting the date to{" "}
+                <b>Any time</b> or <b>Last 7 days</b>, clearing the search, or
+                widening the experience range.
+              </>
+            ) : (
+              <>
+                No jobs yet. The crawler runs automatically every 30&nbsp;minutes,
+                so check back shortly or click <b>Run crawl</b>.
+              </>
+            )}
+          </div>
+        )}
+
+        {jobs.map((job) => (
+          <JobCard key={job.id} job={job} onChange={load} />
+        ))}
+      </div>
     </div>
   );
 }
