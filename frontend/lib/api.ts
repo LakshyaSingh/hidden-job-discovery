@@ -97,8 +97,32 @@ export async function updateJobState(
   return res.json();
 }
 
+const ADMIN_KEY_STORAGE = "adminApiKey";
+
+/** Prompt for the admin key (stored locally) so the manual crawl button can
+ * authenticate without embedding a secret in the bundle. */
+function getAdminKey(forcePrompt = false): string | null {
+  if (typeof window === "undefined") return null;
+  let key = forcePrompt ? null : window.localStorage.getItem(ADMIN_KEY_STORAGE);
+  if (!key) {
+    key = window.prompt("Admin API key (from Render → jobscraper-api → Environment):");
+    if (key) window.localStorage.setItem(ADMIN_KEY_STORAGE, key);
+  }
+  return key;
+}
+
 export async function triggerCrawl(): Promise<unknown> {
-  const res = await fetch(`${API_URL}/crawl`, { method: "POST" });
+  const key = getAdminKey();
+  const res = await fetch(`${API_URL}/crawl`, {
+    method: "POST",
+    headers: key ? { "X-API-Key": key } : {},
+  });
+  if (res.status === 401) {
+    // Stored key was wrong/rotated — clear it so the next click re-prompts.
+    if (typeof window !== "undefined")
+      window.localStorage.removeItem(ADMIN_KEY_STORAGE);
+    throw new Error("Crawl rejected: invalid admin API key. Try again.");
+  }
   if (!res.ok) throw new Error(`triggerCrawl failed: ${res.status}`);
   return res.json();
 }

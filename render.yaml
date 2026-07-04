@@ -41,3 +41,7 @@ services:
       # https://your-app.vercel.app). Left unset here on purpose.
       - key: CORS_ORIGINS
         sync: false
+      # Guards /crawl and POST /companies. Render generates a strong value;
+      # read it from the dashboard to use the "Run crawl" button or add companies.
+      - key: ADMIN_API_KEY
+        generateValue: true

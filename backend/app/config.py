@@ -38,6 +38,10 @@ class Settings(BaseSettings):
     # Comma-separated origins allowed to call the API (the Next.js dev server).
     cors_origins: str = "http://localhost:3000"
 
+    # Secret guarding admin/write endpoints (crawl trigger, company create).
+    # When empty, those endpoints are OPEN — set this in any public deployment.
+    admin_api_key: str = ""
+
     # How long a freshly discovered job stays flagged is_new (hours).
     new_job_window_hours: int = 48
 

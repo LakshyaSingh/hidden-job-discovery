@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import require_admin_key
 from app.database import get_session
 from app.models import Company
 from app.scrapers.base import supported_providers
@@ -29,7 +30,9 @@ async def list_companies(session: AsyncSession = Depends(get_session)):
 
 @router.post("/companies", response_model=CompanyOut, status_code=201)
 async def create_company(
-    payload: CompanyCreate, session: AsyncSession = Depends(get_session)
+    payload: CompanyCreate,
+    session: AsyncSession = Depends(get_session),
+    _: None = Depends(require_admin_key),
 ):
     company = Company(**payload.model_dump())
     session.add(company)
@@ -44,7 +47,9 @@ async def create_company(
 
 @router.post("/crawl", response_model=list[CrawlRunOut])
 async def trigger_crawl(
-    company_id: int | None = None, session: AsyncSession = Depends(get_session)
+    company_id: int | None = None,
+    session: AsyncSession = Depends(get_session),
+    _: None = Depends(require_admin_key),
 ):
     """Trigger a crawl of one company (company_id) or all active companies.
 
