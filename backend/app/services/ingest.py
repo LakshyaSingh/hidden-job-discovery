@@ -92,6 +92,16 @@ async def ingest_jobs(
     seen_external_ids: set[str] = set()
 
     for nj in jobs:
+        # Clamp to column limits so one oversized field can't abort the batch.
+        nj.external_id = nj.external_id[:255]
+        nj.title = (nj.title or "")[:512]
+        if nj.location_raw:
+            nj.location_raw = nj.location_raw[:512]
+        if nj.apply_url:
+            nj.apply_url = nj.apply_url[:1024]
+        if nj.employment_type:
+            nj.employment_type = nj.employment_type[:64]
+
         seen_external_ids.add(nj.external_id)
         fingerprint = extract.content_fingerprint(
             company.name, nj.title, nj.location_raw

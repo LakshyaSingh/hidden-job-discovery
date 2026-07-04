@@ -40,8 +40,12 @@ async def crawl_company(session: AsyncSession, company: Company) -> CrawlRun:
         run.ok = True
     except Exception as exc:  # noqa: BLE001 — record & continue to next company
         logger.exception("crawl failed for %s", company.name)
+        # Roll back the poisoned transaction so the next company (and the
+        # CrawlRun write below) start from a clean session.
+        await session.rollback()
+        run = await session.merge(run)
         run.ok = False
-        run.error = str(exc)
+        run.error = str(exc)[:2000]
     finally:
         run.finished_at = datetime.now(timezone.utc)
         await session.commit()

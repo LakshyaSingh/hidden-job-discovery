@@ -112,6 +112,21 @@ async def test_unchanged_then_removed(session):
 
 
 @pytest.mark.asyncio
+async def test_oversized_fields_are_clamped(session):
+    company = await _company(session)
+    job = NormalizedJob(
+        external_id="9", title="X" * 600, apply_url="https://x/9",
+        company_name="Stripe", location_raw="Y" * 800, original_posted_at=_now(),
+    )
+    s = await ingest_jobs(session, company, [job])
+    assert s.new == 1
+    row = (
+        await session.execute(select(Job).where(Job.external_id == "9"))
+    ).scalar_one()
+    assert len(row.title) <= 512 and len(row.location_raw) <= 512
+
+
+@pytest.mark.asyncio
 async def test_empty_fetch_does_not_close(session):
     """A fetch returning 0 jobs is treated as a suspected partial/failed fetch
     and must NOT close the board (this was causing count fluctuation)."""
