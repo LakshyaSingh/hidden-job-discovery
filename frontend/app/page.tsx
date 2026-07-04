@@ -59,6 +59,17 @@ export default function Dashboard() {
     }
   }
 
+  const hasFilters = Boolean(
+    filters.q ||
+      filters.posted_within ||
+      filters.location_type ||
+      filters.min_experience != null ||
+      filters.max_experience != null ||
+      filters.only_new ||
+      filters.discovered_today ||
+      filters.bookmarked,
+  );
+
   return (
     <div className="container">
       <header className="top">
@@ -177,8 +188,18 @@ export default function Dashboard() {
 
       {!loading && jobs.length === 0 && (
         <div className="empty">
-          No jobs yet. Seed companies (<code>python -m app.worker.run seed</code>)
-          then click <b>Run crawl</b>.
+          {hasFilters ? (
+            <>
+              No jobs match your filters. Try setting the date to{" "}
+              <b>Any time</b> or <b>Last 7 days</b>, clearing the search, or
+              widening the experience range.
+            </>
+          ) : (
+            <>
+              No jobs yet — the crawler runs automatically every 30&nbsp;minutes.
+              Check back shortly, or click <b>Run crawl</b>.
+            </>
+          )}
         </div>
       )}
 
