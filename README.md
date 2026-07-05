@@ -1,34 +1,45 @@
 # Hidden Job Discovery Platform
 
-Discovers newly posted jobs directly from company career portals (ATS platforms)
-before they spread to LinkedIn/Indeed, and surfaces them in a clean dashboard.
+Discovers newly posted **US** jobs directly from company career portals (ATS
+platforms) before they spread to LinkedIn/Indeed, and surfaces them in a clean,
+fast dashboard.
 
-**Phase 1 (this repo):** Greenhouse provider, deduplicating ingest pipeline with
-source-of-truth posting dates, a filterable REST API, and a Next.js dashboard.
-See [ARCHITECTURE.md](ARCHITECTURE.md) for the full design and trade-offs.
+- **5 ATS scrapers** (Greenhouse, Lever, Ashby, SmartRecruiters, Workday) behind a
+  common interface, **3 aggregator feeds** (The Muse, Remotive, Jobicy), and an
+  auto-discovery engine that finds new company boards.
+- Deduplicating ingest with source-of-truth posting dates, US-only filtering,
+  title-based experience inference, and a role-taxonomy search.
+- Deployed: **Vercel** (frontend) + **Render** (API + Postgres) + **GitHub Actions**
+  (crawl / discover / keep-warm). Live at https://hidden-job-discovery.vercel.app.
+
+> **New here (incl. AI agents)?** Read **[CODEX_HANDOFF.md](CODEX_HANDOFF.md)** — full
+> onboarding: infra, env vars/keys, repo map, API reference, roadmap, and gotchas.
+> See [ARCHITECTURE.md](ARCHITECTURE.md) for design rationale.
 
 ```
 frontend/   Next.js + TypeScript dashboard
-backend/    FastAPI + SQLAlchemy + scrapers + ingest + worker
+backend/    FastAPI + SQLAlchemy + Alembic + scrapers + aggregators + ingest + worker
 ```
 
 ## Quick start
 
-### 1. Database
-```bash
-docker compose up -d db          # Postgres on localhost:5432
-```
-
-### 2. Backend
+### Backend
 ```bash
 cd backend
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
 
-python -m app.worker.run seed    # add sample Greenhouse boards
-python -m app.worker.run crawl   # discover jobs now
-uvicorn app.main:app --reload    # API on http://localhost:8000  (/docs for OpenAPI)
+# Easiest local setup uses SQLite (no Postgres needed) — set in .env:
+#   DATABASE_URL=sqlite+aiosqlite:///./dev.db
+#   AUTO_CREATE_TABLES=true
+# (Or `docker compose up -d db` for Postgres, then `alembic upgrade head`.)
+
+python -m app.worker.run seed        # sample companies
+python -m app.worker.run discover    # probe candidate slugs -> register live boards
+python -m app.worker.run aggregate   # pull The Muse / Remotive / Jobicy feeds
+python -m app.worker.run crawl       # crawl all active companies now
+uvicorn app.main:app --reload        # API on http://localhost:8000  (/docs for OpenAPI)
 ```
 Run continuously with `python -m app.worker.run loop 900` (crawl every 15 min).
 
