@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   fetchJobs,
   triggerCrawl,
@@ -25,18 +25,25 @@ export default function Dashboard() {
   // Separate input state so typing is instant; the query only fires after a
   // short pause (debounce) instead of once per keystroke.
   const [searchText, setSearchText] = useState("");
+  // Monotonic request id: only the most recent fetch may write to state, so a
+  // slow earlier request (e.g. an unfiltered one during a crawl) can't resolve
+  // late and clobber the current filtered results.
+  const reqSeq = useRef(0);
 
   const load = useCallback(async () => {
+    const myId = ++reqSeq.current;
     setLoading(true);
     try {
       const data = await fetchJobs(filters);
+      if (myId !== reqSeq.current) return; // a newer request superseded us
       setJobs(data.items);
       setTotal(data.total);
     } catch {
+      if (myId !== reqSeq.current) return;
       setJobs([]);
       setTotal(0);
     } finally {
-      setLoading(false);
+      if (myId === reqSeq.current) setLoading(false);
     }
   }, [filters]);
 
@@ -45,11 +52,12 @@ export default function Dashboard() {
   }, [load]);
 
   // Debounce the search box → filters.q (300ms after the last keystroke).
+  // No-op when unchanged so it never triggers a redundant fetch.
   useEffect(() => {
-    const id = setTimeout(
-      () => set("q", searchText.trim() || undefined),
-      300,
-    );
+    const id = setTimeout(() => {
+      const q = searchText.trim() || undefined;
+      setFilters((f) => (f.q === q ? f : { ...f, q }));
+    }, 300);
     return () => clearTimeout(id);
   }, [searchText]);
 
