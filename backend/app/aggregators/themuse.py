@@ -55,7 +55,11 @@ async def fetch_themuse(max_pages: int | None = None) -> list[NormalizedJob]:
     pages = max_pages if max_pages is not None else settings.themuse_max_pages
     results: list[NormalizedJob] = []
     for page in range(1, pages + 1):
-        resp = await http.get(_URL, params={"page": page})
+        try:
+            resp = await http.get(_URL, params={"page": page})
+        except Exception:  # noqa: BLE001 — The Muse 400s past its page limit
+            logger.info("themuse: stopping at page %d (page limit reached)", page)
+            break
         if resp.status_code != 200:
             break
         payload = resp.json()

@@ -50,7 +50,7 @@ class Settings(BaseSettings):
     workday_max_jobs: int = 200
 
     # Aggregator volume caps (bound against the free Postgres size limit).
-    themuse_max_pages: int = 100  # 20 jobs/page
+    themuse_max_pages: int = 99  # 20 jobs/page; The Muse 400s beyond page ~99
     remotive_max_jobs: int = 600
     jobicy_max_jobs: int = 300
 
