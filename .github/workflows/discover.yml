@@ -19,6 +19,8 @@ jobs:
         working-directory: backend
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      ADZUNA_APP_ID: ${{ secrets.ADZUNA_APP_ID }}
+      ADZUNA_APP_KEY: ${{ secrets.ADZUNA_APP_KEY }}
       AUTO_CREATE_TABLES: "false"
     steps:
       - uses: actions/checkout@v4
@@ -32,7 +34,7 @@ jobs:
         run: alembic upgrade head
       - name: Discover companies
         run: python -m app.worker.run discover
-      - name: Aggregate (The Muse broad US feed)
+      - name: Aggregate broad US feeds
         run: python -m app.worker.run aggregate
       - name: Crawl (populate newly-added companies)
         run: python -m app.worker.run crawl

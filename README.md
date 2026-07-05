@@ -5,7 +5,7 @@ platforms) before they spread to LinkedIn/Indeed, and surfaces them in a clean,
 fast dashboard.
 
 - **5 ATS scrapers** (Greenhouse, Lever, Ashby, SmartRecruiters, Workday) behind a
-  common interface, **3 aggregator feeds** (The Muse, Remotive, Jobicy), and an
+  common interface, **4 aggregator feeds** (The Muse, Remotive, Jobicy, Adzuna), and an
   auto-discovery engine that finds new company boards.
 - Deduplicating ingest with source-of-truth posting dates, US-only filtering,
   title-based experience inference, and a role-taxonomy search.
@@ -35,7 +35,7 @@ cp .env.example .env
 
 python -m app.worker.run seed        # sample companies
 python -m app.worker.run discover    # probe candidate slugs -> register live boards
-python -m app.worker.run aggregate   # pull The Muse / Remotive / Jobicy feeds
+python -m app.worker.run aggregate   # pull The Muse / Remotive / Jobicy / Adzuna feeds
 python -m app.worker.run crawl       # crawl all active companies now
 uvicorn app.main:app --reload        # API on http://localhost:8000  (/docs for OpenAPI)
 ```

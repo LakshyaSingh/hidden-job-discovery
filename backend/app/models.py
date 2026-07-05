@@ -46,6 +46,7 @@ class ATSProvider(str, enum.Enum):
     themuse = "themuse"
     remotive = "remotive"
     jobicy = "jobicy"
+    adzuna = "adzuna"
 
 
 class LocationType(str, enum.Enum):

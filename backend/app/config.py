@@ -53,6 +53,9 @@ class Settings(BaseSettings):
     themuse_max_pages: int = 99  # 20 jobs/page; The Muse 400s beyond page ~99
     remotive_max_jobs: int = 600
     jobicy_max_jobs: int = 300
+    adzuna_max_jobs: int = 1000
+    adzuna_app_id: str = ""
+    adzuna_app_key: str = ""
 
     # Per-domain politeness: minimum seconds between requests to the same host.
     request_min_interval_seconds: float = 0.5

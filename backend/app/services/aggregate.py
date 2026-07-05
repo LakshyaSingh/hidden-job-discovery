@@ -16,6 +16,7 @@ from collections import defaultdict
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.aggregators.adzuna import fetch_adzuna
 from app.aggregators.jobicy import fetch_jobicy
 from app.aggregators.remotive import fetch_remotive
 from app.aggregators.themuse import fetch_themuse
@@ -83,6 +84,7 @@ _AGGREGATORS = [
     (ATSProvider.themuse, fetch_themuse),
     (ATSProvider.remotive, fetch_remotive),
     (ATSProvider.jobicy, fetch_jobicy),
+    (ATSProvider.adzuna, fetch_adzuna),
 ]
 
 

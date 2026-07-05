@@ -32,6 +32,80 @@ def test_jobicy_level_mapping():
     assert _level_exp(None) == (None, None)
 
 
+@pytest.mark.asyncio
+async def test_adzuna_skips_without_credentials(monkeypatch):
+    from app.aggregators import adzuna
+
+    monkeypatch.setattr(adzuna.settings, "adzuna_app_id", "")
+    monkeypatch.setattr(adzuna.settings, "adzuna_app_key", "")
+
+    assert await adzuna.fetch_adzuna() == []
+
+
+@pytest.mark.asyncio
+async def test_adzuna_fetch_maps_results(monkeypatch):
+    from app.aggregators import adzuna
+    from app.models import LocationType
+
+    class FakeResponse:
+        status_code = 200
+
+        def json(self):
+            return {
+                "results": [
+                    {
+                        "id": "abc123",
+                        "title": "Senior Product Manager",
+                        "company": {"display_name": "Acme"},
+                        "location": {"display_name": "New York, NY"},
+                        "redirect_url": "https://adzuna.example/job/abc123",
+                        "created": "2026-07-05T12:34:56Z",
+                        "description": "<p>Own roadmap and analytics. 5+ years.</p>",
+                        "salary_min": 120000,
+                        "salary_max": "160000",
+                        "contract_time": "full_time",
+                        "contract_type": "permanent",
+                        "category": {"label": "Product Jobs"},
+                    },
+                    {
+                        "id": "missing-title",
+                        "company": {"display_name": "Acme"},
+                        "redirect_url": "https://adzuna.example/job/missing-title",
+                    },
+                ]
+            }
+
+    calls = []
+
+    async def fake_get(url, *, params=None):
+        calls.append((url, params))
+        return FakeResponse()
+
+    monkeypatch.setattr(adzuna.settings, "adzuna_app_id", "app-id")
+    monkeypatch.setattr(adzuna.settings, "adzuna_app_key", "app-key")
+    monkeypatch.setattr(adzuna.http, "get", fake_get)
+
+    jobs = await adzuna.fetch_adzuna(max_jobs=1)
+
+    assert len(jobs) == 1
+    job = jobs[0]
+    assert job.external_id == "abc123"
+    assert job.title == "Senior Product Manager"
+    assert job.company_name == "Acme"
+    assert job.location_raw == "New York, NY"
+    assert job.location_type == LocationType.onsite
+    assert job.is_us is True
+    assert job.salary_min == 120000
+    assert job.salary_max == 160000
+    assert job.salary_currency == "USD"
+    assert job.min_experience == 5
+    assert job.max_experience is None
+    assert job.employment_type == "full time / permanent / Product Jobs"
+    assert "analytics" in job.skills
+    assert calls[0][1]["app_id"] == "app-id"
+    assert calls[0][1]["app_key"] == "app-key"
+
+
 def _job(company, ext):
     return NormalizedJob(
         external_id=ext, title="Product Manager", apply_url=f"https://m/{ext}",
