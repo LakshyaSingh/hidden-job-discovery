@@ -12,9 +12,7 @@ fast dashboard.
 - Deployed: **Vercel** (frontend) + **Render** (API + Postgres) + **GitHub Actions**
   (crawl / discover / keep-warm). Live at https://hidden-job-discovery.vercel.app.
 
-> **New here (incl. AI agents)?** Read **[CODEX_HANDOFF.md](CODEX_HANDOFF.md)** — full
-> onboarding: infra, env vars/keys, repo map, API reference, roadmap, and gotchas.
-> See [ARCHITECTURE.md](ARCHITECTURE.md) for design rationale.
+> See **[ARCHITECTURE.md](ARCHITECTURE.md)** for the full design and trade-offs.
 
 ```
 frontend/   Next.js + TypeScript dashboard
