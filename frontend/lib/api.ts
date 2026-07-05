@@ -56,7 +56,7 @@ export interface JobFilters {
   max_experience?: number;
   location_type?: LocationType;
   provider?: string;
-  posted_within?: "24h" | "48h" | "7d";
+  posted_within?: "24h" | "48h" | "7d" | "14d" | "30d";
   only_new?: boolean;
   discovered_today?: boolean;
   bookmarked?: boolean;

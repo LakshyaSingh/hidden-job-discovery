@@ -30,7 +30,7 @@ from app.schemas import (
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
-_POSTED_WINDOWS = {"24h": 24, "48h": 48, "7d": 24 * 7}
+_POSTED_WINDOWS = {"24h": 24, "48h": 48, "7d": 24 * 7, "14d": 24 * 14, "30d": 24 * 30}
 SortField = Literal["posted", "discovered", "title", "company"]
 
 
@@ -43,7 +43,7 @@ async def list_jobs(
     location_type: LocationType | None = None,
     provider: ATSProvider | None = None,
     us_only: bool = True,
-    posted_within: Literal["24h", "48h", "7d"] | None = None,
+    posted_within: Literal["24h", "48h", "7d", "14d", "30d"] | None = None,
     status: JobStatus = JobStatus.open,
     only_new: bool = False,
     discovered_today: bool = False,

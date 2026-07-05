@@ -200,6 +200,8 @@ export default function Dashboard() {
             <option value="24h">Last 24 hours</option>
             <option value="48h">Last 48 hours</option>
             <option value="7d">Last 7 days</option>
+            <option value="14d">Last 14 days</option>
+            <option value="30d">Last 30 days</option>
           </select>
 
           <select
