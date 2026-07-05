@@ -5,7 +5,7 @@ whose board actually returns jobs get registered, so this list can be liberal:
 wrong guesses are simply ignored. Extend it freely to widen coverage.
 """
 
-CANDIDATE_SLUGS: list[str] = [
+_RAW: list[str] = [
     # --- Fintech / payments ---
     "stripe", "brex", "ramp", "mercury", "plaid", "affirm", "chime", "sofi",
     "wealthfront", "betterment", "robinhood", "gemini", "coinbase", "circle",
@@ -37,4 +37,30 @@ CANDIDATE_SLUGS: list[str] = [
     # --- Education / media ---
     "coursera", "udemy", "duolingo", "quizlet", "chegg", "medium", "substack",
     "quora", "brilliant",
+    # --- More fintech / crypto ---
+    "stubhub", "gusto", "current", "varo", "dave", "mxtechnologies", "alloy",
+    "petal", "tala", "nerdwallet", "creditkarma", "kraken", "blockchain",
+    "paxos", "fireblocks", "chainalysis", "alchemy", "ledger",
+    # --- More dev tools / infra / security ---
+    "docker", "circleci", "sourcegraph", "gradle", "jfrog", "sonarsource",
+    "postman", "kong", "grafana", "chronosphere", "honeycomb", "datadog",
+    "sysdig", "aquasecurity", "orca", "semgrep", "socket", "doppler",
+    "cloudsmith", "warp", "zed", "modal", "baseten", "fal", "e2b",
+    # --- More AI / data ---
+    "elevenlabs", "assemblyai", "deepgram", "pinecone", "weaviate", "chroma",
+    "llamaindex", "langchain", "contextual", "mistralai", "suno", "captions",
+    "descript", "synthesia", "tome", "gamma", "browserbase",
+    # --- More SaaS / product / ops ---
+    "ramp", "rippling", "deel", "airbase", "brex", "mercury", "pilot", "puzzle",
+    "float", "ashby", "greenhouse", "lever", "gem", "rippling", "assembled",
+    "front", "intercom", "zendesk", "twilio", "sendbird", "courier",
+    "knock", "customerio", "attentive", "iterable", "braze", "hightouch",
+    "census", "rudderstack", "metabase", "preset", "count", "omni",
+    # --- More consumer / marketplace / health ---
+    "whoop", "oura", "levels", "function", "transcarent", "hims",
+    "noom", "cerebral", "headway", "grow", "sondermind", "brightside",
+    "alma", "zocdoc", "cedar", "olive", "garner",
 ]
+
+# De-duplicate while preserving order so the list can be edited liberally.
+CANDIDATE_SLUGS: list[str] = list(dict.fromkeys(_RAW))

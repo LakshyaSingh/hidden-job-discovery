@@ -12,6 +12,26 @@ def test_slugify():
     assert _slugify("AT&T, Inc.") == "at-t-inc"
 
 
+def test_remotive_us_eligibility():
+    from app.aggregators.remotive import _us_eligible
+    assert _us_eligible("USA") is True
+    assert _us_eligible("USA, Canada, USA timezones") is True
+    assert _us_eligible("North America") is True
+    assert _us_eligible("Worldwide") is True
+    assert _us_eligible("Canada") is False
+    assert _us_eligible("Germany") is False
+    assert _us_eligible("LATAM, Europe") is False
+    assert _us_eligible(None) is False
+
+
+def test_jobicy_level_mapping():
+    from app.aggregators.jobicy import _level_exp
+    assert _level_exp("Senior") == (5, None)
+    assert _level_exp("Entry-Level") == (0, 2)
+    assert _level_exp("Executive") == (10, None)
+    assert _level_exp(None) == (None, None)
+
+
 def _job(company, ext):
     return NormalizedJob(
         external_id=ext, title="Product Manager", apply_url=f"https://m/{ext}",

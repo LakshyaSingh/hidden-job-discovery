@@ -18,7 +18,7 @@ from sqlalchemy.exc import IntegrityError
 from app.config import get_settings
 from app.database import Base, SessionLocal, engine
 from app.models import ATSProvider, Company
-from app.services.aggregate import run_themuse
+from app.services.aggregate import run_aggregators
 from app.services.crawl import crawl_all
 from app.services.discovery import discover_companies
 
@@ -99,11 +99,8 @@ async def discover_once() -> None:
 async def aggregate_once() -> None:
     await init_db()
     async with SessionLocal() as session:
-        stats = await run_themuse(session)
-        logger.info(
-            "aggregate complete: employers=%d jobs=%d new=%d",
-            stats["employers"], stats["jobs"], stats["new"],
-        )
+        out = await run_aggregators(session)
+        logger.info("aggregate complete: %s", out)
 
 
 def main() -> None:

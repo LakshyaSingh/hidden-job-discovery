@@ -16,6 +16,8 @@ from collections import defaultdict
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.aggregators.jobicy import fetch_jobicy
+from app.aggregators.remotive import fetch_remotive
 from app.aggregators.themuse import fetch_themuse
 from app.models import ATSProvider, Company
 from app.scrapers.base import NormalizedJob
@@ -76,6 +78,24 @@ async def ingest_source(
     return stats
 
 
-async def run_themuse(session: AsyncSession) -> dict:
-    jobs = await fetch_themuse()
-    return await ingest_source(session, ATSProvider.themuse, jobs)
+# Registry of aggregator sources: (provider, fetch fn). Add a source here.
+_AGGREGATORS = [
+    (ATSProvider.themuse, fetch_themuse),
+    (ATSProvider.remotive, fetch_remotive),
+    (ATSProvider.jobicy, fetch_jobicy),
+]
+
+
+async def run_aggregators(session: AsyncSession) -> dict:
+    """Run every aggregator source; isolate failures so one dead feed can't
+    stop the others."""
+    out: dict = {}
+    for provider, fetch in _AGGREGATORS:
+        try:
+            jobs = await fetch()
+            out[provider.value] = await ingest_source(session, provider, jobs)
+        except Exception:  # noqa: BLE001 — a flaky feed shouldn't abort the rest
+            logger.exception("aggregator %s failed", provider.value)
+            await session.rollback()
+            out[provider.value] = {"error": True}
+    return out
