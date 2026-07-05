@@ -1,0 +1,138 @@
+"""Tests for Google CSE-based ATS token discovery (network mocked)."""
+import pytest
+from sqlalchemy import select
+
+from app.models import ATSProvider, Company
+from app.services import discovery_search
+from app.services.discovery_search import (
+    SearchToken,
+    build_queries,
+    discover_from_search,
+    extract_tokens,
+    fetch_search_tokens,
+)
+
+
+def test_extract_tokens_from_ats_urls():
+    tokens = extract_tokens(
+        [
+            {
+                "link": "https://job-boards.greenhouse.io/acme/jobs/123",
+            },
+            {
+                "link": "https://boards.greenhouse.io/acme/jobs/456",
+            },
+            {
+                "link": "https://jobs.lever.co/globex/abc",
+            },
+            {
+                "link": "https://jobs.ashbyhq.com/AcmeAI/abc",
+            },
+            {
+                "link": "https://example.com/not-a-board",
+            },
+        ]
+    )
+
+    assert tokens == [
+        SearchToken(ATSProvider.greenhouse, "acme", "https://job-boards.greenhouse.io/acme/jobs/123"),
+        SearchToken(ATSProvider.lever, "globex", "https://jobs.lever.co/globex/abc"),
+        SearchToken(ATSProvider.ashby, "AcmeAI", "https://jobs.ashbyhq.com/AcmeAI/abc"),
+    ]
+
+
+def test_build_queries_covers_supported_hosts():
+    queries = build_queries(["product manager"])
+
+    assert queries == [
+        (ATSProvider.greenhouse, "job-boards.greenhouse.io", 'site:job-boards.greenhouse.io "product manager"'),
+        (ATSProvider.greenhouse, "boards.greenhouse.io", 'site:boards.greenhouse.io "product manager"'),
+        (ATSProvider.lever, "jobs.lever.co", 'site:jobs.lever.co "product manager"'),
+        (ATSProvider.ashby, "jobs.ashbyhq.com", 'site:jobs.ashbyhq.com "product manager"'),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_fetch_search_tokens_skips_without_credentials(monkeypatch):
+    monkeypatch.setattr(discovery_search.settings, "google_cse_key", "")
+    monkeypatch.setattr(discovery_search.settings, "google_cse_cx", "")
+
+    assert await fetch_search_tokens(max_queries=1) == []
+
+
+@pytest.mark.asyncio
+async def test_fetch_search_tokens_uses_google_json_api(monkeypatch):
+    class FakeResponse:
+        status_code = 200
+
+        def json(self):
+            return {
+                "items": [
+                    {"link": "https://jobs.lever.co/acme/abc"},
+                    {"link": "https://jobs.lever.co/acme/duplicate"},
+                ]
+            }
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs):
+            self.calls = []
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        async def get(self, url, *, params):
+            self.calls.append((url, params))
+            return FakeResponse()
+
+    fake_client = FakeClient()
+
+    def fake_client_factory(*args, **kwargs):
+        return fake_client
+
+    monkeypatch.setattr(discovery_search.settings, "google_cse_key", "key")
+    monkeypatch.setattr(discovery_search.settings, "google_cse_cx", "cx")
+    monkeypatch.setattr(discovery_search.httpx, "AsyncClient", fake_client_factory)
+
+    tokens = await fetch_search_tokens(roles=["software engineer"], max_queries=3)
+
+    assert tokens == [SearchToken(ATSProvider.lever, "acme", "https://jobs.lever.co/acme/abc")]
+    assert len(fake_client.calls) == 3
+    url, params = fake_client.calls[0]
+    assert url == "https://customsearch.googleapis.com/customsearch/v1"
+    assert params["key"] == "key"
+    assert params["cx"] == "cx"
+    assert params["num"] == 10
+    assert "site:" in params["q"]
+
+
+@pytest.mark.asyncio
+async def test_discover_from_search_registers_verified_tokens(session, monkeypatch):
+    async def fake_fetch_search_tokens(*, roles=None, max_queries=None):
+        return [
+            SearchToken(ATSProvider.lever, "acme", "https://jobs.lever.co/acme/abc"),
+            SearchToken(ATSProvider.ashby, "AcmeAI", "https://jobs.ashbyhq.com/AcmeAI/abc"),
+        ]
+
+    async def fake_probe_token(client, provider, identifier):
+        return identifier if provider in {ATSProvider.lever, ATSProvider.ashby} else None
+
+    monkeypatch.setattr(discovery_search, "fetch_search_tokens", fake_fetch_search_tokens)
+    monkeypatch.setattr(discovery_search, "_probe_token", fake_probe_token)
+
+    stats = await discover_from_search(session, roles=["product manager"], max_queries=1)
+
+    assert stats["tokens"] == 2
+    assert stats["found"] == 2
+    assert stats["added"] == 2
+
+    rows = (await session.execute(select(Company))).scalars().all()
+    assert {(c.ats_provider, c.ats_identifier) for c in rows} == {
+        (ATSProvider.lever, "acme"),
+        (ATSProvider.ashby, "AcmeAI"),
+    }
+
+    stats2 = await discover_from_search(session, roles=["product manager"], max_queries=1)
+    assert stats2["added"] == 0

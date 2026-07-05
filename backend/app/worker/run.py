@@ -3,6 +3,7 @@
 Usage:
     python -m app.worker.run seed      # insert a few real Greenhouse boards
     python -m app.worker.run discover  # probe candidate slugs, add live boards
+    python -m app.worker.run discover-search  # Google CSE -> ATS tokens
     python -m app.worker.run crawl     # crawl all active companies once
     python -m app.worker.run loop 900  # crawl every 900s (Phase-1 scheduler)
 """
@@ -21,6 +22,7 @@ from app.models import ATSProvider, Company
 from app.services.aggregate import run_aggregators
 from app.services.crawl import crawl_all
 from app.services.discovery import discover_companies
+from app.services.discovery_search import discover_from_search
 
 logger = logging.getLogger("worker")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s")
@@ -96,6 +98,16 @@ async def discover_once() -> None:
         )
 
 
+async def discover_search_once() -> None:
+    await init_db()
+    async with SessionLocal() as session:
+        stats = await discover_from_search(session)
+        logger.info(
+            "google discovery complete: queries=%d tokens=%d found=%d added=%d",
+            stats["queries"], stats["tokens"], stats["found"], stats["added"],
+        )
+
+
 async def aggregate_once() -> None:
     await init_db()
     async with SessionLocal() as session:
@@ -111,6 +123,8 @@ def main() -> None:
         asyncio.run(crawl_once())
     elif cmd == "discover":
         asyncio.run(discover_once())
+    elif cmd == "discover-search":
+        asyncio.run(discover_search_once())
     elif cmd == "aggregate":
         asyncio.run(aggregate_once())
     elif cmd == "loop":

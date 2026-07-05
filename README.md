@@ -35,6 +35,7 @@ cp .env.example .env
 
 python -m app.worker.run seed        # sample companies
 python -m app.worker.run discover    # probe candidate slugs -> register live boards
+python -m app.worker.run discover-search  # Google CSE -> register ATS boards
 python -m app.worker.run aggregate   # pull The Muse / Remotive / Jobicy / Adzuna feeds
 python -m app.worker.run crawl       # crawl all active companies now
 uvicorn app.main:app --reload        # API on http://localhost:8000  (/docs for OpenAPI)
