@@ -4,7 +4,9 @@ name: Crawl jobs
 # Requires a repo secret DATABASE_URL = your Render EXTERNAL database URL.
 on:
   schedule:
-    - cron: "*/30 * * * *"   # every 30 minutes (GitHub's practical minimum cadence)
+    # Four runs/day keeps postings reasonably fresh without exhausting the
+    # 2,000 monthly GitHub Actions minutes included with a private repo.
+    - cron: "17 */6 * * *"   # every 6 hours
   workflow_dispatch: {}       # allows manual runs from the Actions tab
 
 concurrency:

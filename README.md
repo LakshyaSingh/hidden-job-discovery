@@ -10,7 +10,7 @@ fast dashboard.
 - Deduplicating ingest with source-of-truth posting dates, US-only filtering,
   title-based experience inference, and a role-taxonomy search.
 - Deployed: **Vercel** (frontend) + **Render** (API + Postgres) + **GitHub Actions**
-  (crawl / discover / keep-warm). Live at https://hidden-job-discovery.vercel.app.
+  (six-hour crawl / weekly discovery). Live at https://hidden-job-discovery.vercel.app.
 
 > See **[ARCHITECTURE.md](ARCHITECTURE.md)** for the full design and trade-offs.
 
