@@ -1,8 +1,7 @@
-"""Discover ATS board tokens via Google Programmable Search.
+"""Discover ATS board tokens via Brave Search.
 
-Uses the official Custom Search JSON API, not Google HTML scraping. Search
-results point at public job-posting URLs; we extract the ATS board token from
-the URL, then verify the board through the normal ATS API before registering it.
+Search results point at public job-posting URLs; we extract the ATS board token
+from the URL, then verify the board through the normal ATS API before registering it.
 """
 from __future__ import annotations
 
@@ -28,7 +27,7 @@ from app.services.discovery import (
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
-_GOOGLE_CSE_URL = "https://customsearch.googleapis.com/customsearch/v1"
+_BRAVE_SEARCH_URL = "https://api.search.brave.com/res/v1/web/search"
 _CONCURRENCY = 4
 _TIMEOUT = 15.0
 _RESULTS_PER_QUERY = 10
@@ -94,7 +93,7 @@ def extract_tokens(items: list[dict]) -> list[SearchToken]:
     seen: set[tuple[ATSProvider, str]] = set()
     tokens: list[SearchToken] = []
     for item in items:
-        link = item.get("link")
+        link = item.get("url") or item.get("link")
         if not isinstance(link, str):
             continue
         token = _token_from_url(link)
@@ -122,12 +121,12 @@ async def fetch_search_tokens(
     roles: list[str] | None = None,
     max_queries: int | None = None,
 ) -> list[SearchToken]:
-    """Run bounded Google CSE queries and return unique ATS board tokens."""
-    if not settings.google_cse_key or not settings.google_cse_cx:
-        logger.info("google discovery: missing credentials; skipping")
+    """Run bounded Brave Search queries and return unique ATS board tokens."""
+    if not settings.brave_search_api_key:
+        logger.info("brave discovery: missing credentials; skipping")
         return []
 
-    limit = max_queries if max_queries is not None else settings.google_cse_max_queries
+    limit = max_queries if max_queries is not None else settings.brave_search_max_queries
     queries = build_queries(roles)[:max(0, limit)]
     if not queries:
         return []
@@ -139,26 +138,27 @@ async def fetch_search_tokens(
         async def run_query(provider: ATSProvider, host: str, query: str) -> list[SearchToken]:
             async with sem:
                 resp = await client.get(
-                    _GOOGLE_CSE_URL,
+                    _BRAVE_SEARCH_URL,
                     params={
-                        "key": settings.google_cse_key,
-                        "cx": settings.google_cse_cx,
                         "q": query,
-                        "num": _RESULTS_PER_QUERY,
-                        "gl": "us",
-                        "cr": "countryUS",
+                        "count": _RESULTS_PER_QUERY,
+                        "country": "US",
+                        "search_lang": "en",
                     },
+                    headers={"X-Subscription-Token": settings.brave_search_api_key},
                 )
                 if resp.status_code != 200:
                     logger.warning(
-                        "google discovery: query failed provider=%s host=%s status=%d",
+                        "brave discovery: query failed provider=%s host=%s status=%d",
                         provider.value,
                         host,
                         resp.status_code,
                     )
                     return []
                 return [
-                    token for token in extract_tokens(resp.json().get("items") or [])
+                    token for token in extract_tokens(
+                        resp.json().get("web", {}).get("results") or []
+                    )
                     if token.provider == provider
                 ]
 
@@ -174,7 +174,7 @@ async def fetch_search_tokens(
             tokens.append(token)
 
     logger.info(
-        "google discovery: queries=%d tokens=%d", len(queries), len(tokens)
+        "brave discovery: queries=%d tokens=%d", len(queries), len(tokens)
     )
     return tokens
 
@@ -264,7 +264,7 @@ async def discover_from_search(
     await session.commit()
     stats = {
         "queries": min(
-            max_queries if max_queries is not None else settings.google_cse_max_queries,
+            max_queries if max_queries is not None else settings.brave_search_max_queries,
             len(build_queries(roles)),
         ),
         "tokens": len(tokens),
@@ -272,7 +272,7 @@ async def discover_from_search(
         "added": added,
     }
     logger.info(
-        "google discovery: tokens=%d found=%d added=%d",
+        "brave discovery: tokens=%d found=%d added=%d",
         stats["tokens"],
         stats["found"],
         stats["added"],

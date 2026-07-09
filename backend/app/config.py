@@ -57,10 +57,9 @@ class Settings(BaseSettings):
     adzuna_app_id: str = ""
     adzuna_app_key: str = ""
 
-    # Google Programmable Search for ATS board-token harvesting.
-    google_cse_key: str = ""
-    google_cse_cx: str = ""
-    google_cse_max_queries: int = 30
+    # Brave Search for ATS board-token harvesting.
+    brave_search_api_key: str = ""
+    brave_search_max_queries: int = 30
 
     # Per-domain politeness: minimum seconds between requests to the same host.
     request_min_interval_seconds: float = 0.5

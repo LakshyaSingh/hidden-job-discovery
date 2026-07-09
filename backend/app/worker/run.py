@@ -3,7 +3,7 @@
 Usage:
     python -m app.worker.run seed      # insert a few real Greenhouse boards
     python -m app.worker.run discover  # probe candidate slugs, add live boards
-    python -m app.worker.run discover-search  # Google CSE -> ATS tokens
+    python -m app.worker.run discover-search  # Brave Search -> ATS tokens
     python -m app.worker.run crawl     # crawl all active companies once
     python -m app.worker.run loop 900  # crawl every 900s (Phase-1 scheduler)
 """
@@ -103,7 +103,7 @@ async def discover_search_once() -> None:
     async with SessionLocal() as session:
         stats = await discover_from_search(session)
         logger.info(
-            "google discovery complete: queries=%d tokens=%d found=%d added=%d",
+            "brave discovery complete: queries=%d tokens=%d found=%d added=%d",
             stats["queries"], stats["tokens"], stats["found"], stats["added"],
         )
 

@@ -21,9 +21,8 @@ jobs:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       ADZUNA_APP_ID: ${{ secrets.ADZUNA_APP_ID }}
       ADZUNA_APP_KEY: ${{ secrets.ADZUNA_APP_KEY }}
-      GOOGLE_CSE_KEY: ${{ secrets.GOOGLE_CSE_KEY }}
-      GOOGLE_CSE_CX: ${{ secrets.GOOGLE_CSE_CX }}
-      GOOGLE_CSE_MAX_QUERIES: "30"
+      BRAVE_SEARCH_API_KEY: ${{ secrets.BRAVE_SEARCH_API_KEY }}
+      BRAVE_SEARCH_MAX_QUERIES: "30"
       AUTO_CREATE_TABLES: "false"
     steps:
       - uses: actions/checkout@v4
@@ -35,7 +34,7 @@ jobs:
       - run: pip install -r requirements.txt
       - name: Apply migrations
         run: alembic upgrade head
-      - name: Google ATS token discovery
+      - name: Brave ATS token discovery
         run: python -m app.worker.run discover-search
       - name: Discover companies
         run: python -m app.worker.run discover

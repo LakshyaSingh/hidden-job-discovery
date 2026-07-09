@@ -1,4 +1,4 @@
-"""Tests for Google CSE-based ATS token discovery (network mocked)."""
+"""Tests for Brave Search-based ATS token discovery (network mocked)."""
 import pytest
 from sqlalchemy import select
 
@@ -54,23 +54,22 @@ def test_build_queries_covers_supported_hosts():
 
 @pytest.mark.asyncio
 async def test_fetch_search_tokens_skips_without_credentials(monkeypatch):
-    monkeypatch.setattr(discovery_search.settings, "google_cse_key", "")
-    monkeypatch.setattr(discovery_search.settings, "google_cse_cx", "")
+    monkeypatch.setattr(discovery_search.settings, "brave_search_api_key", "")
 
     assert await fetch_search_tokens(max_queries=1) == []
 
 
 @pytest.mark.asyncio
-async def test_fetch_search_tokens_uses_google_json_api(monkeypatch):
+async def test_fetch_search_tokens_uses_brave_search_api(monkeypatch):
     class FakeResponse:
         status_code = 200
 
         def json(self):
             return {
-                "items": [
-                    {"link": "https://jobs.lever.co/acme/abc"},
-                    {"link": "https://jobs.lever.co/acme/duplicate"},
-                ]
+                "web": {"results": [
+                    {"url": "https://jobs.lever.co/acme/abc"},
+                    {"url": "https://jobs.lever.co/acme/duplicate"},
+                ]}
             }
 
     class FakeClient:
@@ -83,8 +82,8 @@ async def test_fetch_search_tokens_uses_google_json_api(monkeypatch):
         async def __aexit__(self, *args):
             return None
 
-        async def get(self, url, *, params):
-            self.calls.append((url, params))
+        async def get(self, url, *, params, headers):
+            self.calls.append((url, params, headers))
             return FakeResponse()
 
     fake_client = FakeClient()
@@ -92,19 +91,18 @@ async def test_fetch_search_tokens_uses_google_json_api(monkeypatch):
     def fake_client_factory(*args, **kwargs):
         return fake_client
 
-    monkeypatch.setattr(discovery_search.settings, "google_cse_key", "key")
-    monkeypatch.setattr(discovery_search.settings, "google_cse_cx", "cx")
+    monkeypatch.setattr(discovery_search.settings, "brave_search_api_key", "key")
     monkeypatch.setattr(discovery_search.httpx, "AsyncClient", fake_client_factory)
 
     tokens = await fetch_search_tokens(roles=["software engineer"], max_queries=3)
 
     assert tokens == [SearchToken(ATSProvider.lever, "acme", "https://jobs.lever.co/acme/abc")]
     assert len(fake_client.calls) == 3
-    url, params = fake_client.calls[0]
-    assert url == "https://customsearch.googleapis.com/customsearch/v1"
-    assert params["key"] == "key"
-    assert params["cx"] == "cx"
-    assert params["num"] == 10
+    url, params, headers = fake_client.calls[0]
+    assert url == "https://api.search.brave.com/res/v1/web/search"
+    assert headers == {"X-Subscription-Token": "key"}
+    assert params["count"] == 10
+    assert params["country"] == "US"
     assert "site:" in params["q"]
 
 
