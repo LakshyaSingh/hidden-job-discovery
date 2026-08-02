@@ -20,7 +20,7 @@ jobs:
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       BRAVE_SEARCH_API_KEY: ${{ secrets.BRAVE_SEARCH_API_KEY }}
-      BRAVE_SEARCH_MAX_QUERIES: "30"
+      BRAVE_SEARCH_MAX_QUERIES: "48"
       AUTO_CREATE_TABLES: "false"
     steps:
       - uses: actions/checkout@v4

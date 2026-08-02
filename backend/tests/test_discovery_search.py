@@ -49,6 +49,50 @@ def test_build_queries_covers_supported_hosts():
         (ATSProvider.greenhouse, "boards.greenhouse.io", 'site:boards.greenhouse.io "product manager"'),
         (ATSProvider.lever, "jobs.lever.co", 'site:jobs.lever.co "product manager"'),
         (ATSProvider.ashby, "jobs.ashbyhq.com", 'site:jobs.ashbyhq.com "product manager"'),
+        (ATSProvider.smartrecruiters, "jobs.smartrecruiters.com", 'site:jobs.smartrecruiters.com "product manager"'),
+        (ATSProvider.workday, "myworkdayjobs.com", 'site:myworkdayjobs.com "product manager"'),
+    ]
+
+
+def test_queries_are_role_major_so_truncation_does_not_starve_a_provider():
+    """The caller slices this list to the query budget.
+
+    Grouping by host meant a budget smaller than hosts x roles was spent
+    entirely on the first providers, and SmartRecruiters and Workday were
+    never searched at all.
+    """
+    queries = build_queries(["product manager", "software engineer"])
+    hosts_in_budget = {host for _, host, _ in queries[: len(discovery_search._PROVIDER_HOSTS)]}
+
+    assert hosts_in_budget == {host for _, host in discovery_search._PROVIDER_HOSTS}
+
+
+def test_extract_tokens_from_workday_and_smartrecruiters_urls():
+    """Neither identifier is guessable from a company name, so the URL is the
+    only source: SmartRecruiters is case-sensitive, and Workday needs a
+    tenant/datacenter/site triple."""
+    tokens = extract_tokens(
+        [
+            {"link": "https://jobs.smartrecruiters.com/Visa/744000012345-analyst"},
+            {"link": "https://careers.smartrecruiters.com/Bosch"},
+            {
+                "link": "https://nvidia.wd5.myworkdayjobs.com/en-US/"
+                        "NVIDIAExternalCareerSite/job/US-CA/Engineer_JR1"
+            },
+            # No locale segment, and a three-digit datacenter.
+            {"link": "https://acme.wd103.myworkdayjobs.com/CareerSite/job/x"},
+            # Path noise rather than a site name.
+            {"link": "https://acme.wd1.myworkdayjobs.com/en-US/job/details"},
+            # Workday's own marketing site is not a tenant.
+            {"link": "https://www.myworkdayjobs.com/about"},
+        ]
+    )
+
+    assert [(t.provider, t.identifier) for t in tokens] == [
+        (ATSProvider.smartrecruiters, "Visa"),
+        (ATSProvider.smartrecruiters, "Bosch"),
+        (ATSProvider.workday, "nvidia:wd5:NVIDIAExternalCareerSite"),
+        (ATSProvider.workday, "acme:wd103:CareerSite"),
     ]
 
 

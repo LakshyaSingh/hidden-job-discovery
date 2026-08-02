@@ -6,9 +6,11 @@ public API and register the company only when the board actually returns jobs.
 Wrong guesses simply do not match, so bad data can't leak in.
 
 Greenhouse, Lever, and Ashby use lowercase-name slugs (e.g. jobs.lever.co/spotify),
-which makes candidate slugs easy to derive and gives good hit rates. Workday and
-SmartRecruiters need tenant-specific identifiers that can't be guessed from a
-name, so they're added manually, not discovered here.
+which makes candidate slugs easy to derive and gives good hit rates.
+SmartRecruiters accepts the same shape (its API takes "visa" as well as "Visa"),
+so it is probed here too. Workday is the exception: its identifier is a
+tenant/datacenter/site triple that no company name implies, so a Workday board
+can only be found by reading a real posting URL — see discovery_search.py.
 
 Run via `python -m app.worker.run discover`. Newly-added companies are then
 picked up by the normal crawl.
@@ -58,11 +60,49 @@ async def _probe_ashby(client: httpx.AsyncClient, slug: str) -> str | None:
     return None
 
 
+# SmartRecruiters turns out to accept a lowercased company name ("visa" as
+# well as "Visa"), so unlike Workday it can be found by slug probing and is in
+# _PROBERS below. Workday cannot: its identifier is a tenant/datacenter/site
+# triple that appears nowhere in a company's name, so the only way to find one
+# is to read it out of a real posting URL, which discovery_search.py does.
+
+
+async def _probe_smartrecruiters(
+    client: httpx.AsyncClient, identifier: str
+) -> str | None:
+    r = await client.get(
+        f"https://api.smartrecruiters.com/v1/companies/{identifier}/postings",
+        params={"limit": 1},
+    )
+    if r.status_code == 200 and r.json().get("content"):
+        return identifier
+    return None
+
+
+async def _probe_workday(client: httpx.AsyncClient, identifier: str) -> str | None:
+    """`identifier` is "tenant:datacenter:site" — see scrapers/workday.py."""
+    parts = identifier.split(":")
+    if len(parts) != 3:
+        return None
+    tenant, dc, site = parts
+    r = await client.post(
+        f"https://{tenant}.{dc}.myworkdayjobs.com/wday/cxs/{tenant}/{site}/jobs",
+        json={"appliedFacets": {}, "limit": 1, "offset": 0, "searchText": ""},
+    )
+    if r.status_code == 200 and r.json().get("jobPostings"):
+        return identifier
+    return None
+
+
 # Ordered: first provider with a live board wins.
 _PROBERS: list[tuple[ATSProvider, "callable"]] = [
     (ATSProvider.greenhouse, _probe_greenhouse),
     (ATSProvider.lever, _probe_lever),
     (ATSProvider.ashby, _probe_ashby),
+    # Last, so a company that also has a Greenhouse/Lever/Ashby board is
+    # recorded against that one instead. This is the only path that grows
+    # SmartRecruiters coverage, which had exactly one company (the seed).
+    (ATSProvider.smartrecruiters, _probe_smartrecruiters),
 ]
 
 

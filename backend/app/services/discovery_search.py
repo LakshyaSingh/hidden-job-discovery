@@ -22,6 +22,8 @@ from app.services.discovery import (
     _probe_ashby,
     _probe_greenhouse,
     _probe_lever,
+    _probe_smartrecruiters,
+    _probe_workday,
 )
 
 logger = logging.getLogger(__name__)
@@ -37,7 +39,19 @@ _PROVIDER_HOSTS: list[tuple[ATSProvider, str]] = [
     (ATSProvider.greenhouse, "boards.greenhouse.io"),
     (ATSProvider.lever, "jobs.lever.co"),
     (ATSProvider.ashby, "jobs.ashbyhq.com"),
+    (ATSProvider.smartrecruiters, "jobs.smartrecruiters.com"),
+    # Search is the only way a Workday board is ever found: its identifier is
+    # a tenant/datacenter/site triple that appears nowhere in a company name,
+    # so it cannot be guessed the way a board token can. A posting URL carries
+    # all three. Every tenant is its own subdomain, so the query targets the
+    # apex domain and the parser picks the tenant out of the host.
+    (ATSProvider.workday, "myworkdayjobs.com"),
 ]
+
+# {tenant}.{wdN}.myworkdayjobs.com
+_WORKDAY_HOST_RE = re.compile(r"^([a-z0-9][a-z0-9-]*)\.(wd\d+)\.myworkdayjobs\.com$")
+# A leading path segment like "en-US" or "fr", which precedes the site name.
+_LOCALE_RE = re.compile(r"^[a-z]{2}(-[a-z]{2})?$", re.I)
 
 _DEFAULT_ROLES = [
     "product manager",
@@ -55,6 +69,11 @@ _BAD_TOKENS = {
     "job_app",
     "jobs",
     "postings",
+    # Workday and SmartRecruiters path noise that is never a site or company.
+    "job",
+    "details",
+    "search",
+    "oneclick-ui",
 }
 
 
@@ -86,6 +105,25 @@ def _token_from_url(url: str) -> SearchToken | None:
         return SearchToken(ATSProvider.lever, first.lower(), url)
     if host == "jobs.ashbyhq.com":
         return SearchToken(ATSProvider.ashby, first, url)
+    # Keep the URL's casing: the API accepts either, but the canonical form
+    # is what the apply links use.
+    if host in {"jobs.smartrecruiters.com", "careers.smartrecruiters.com"}:
+        return SearchToken(ATSProvider.smartrecruiters, first, url)
+
+    workday = _WORKDAY_HOST_RE.match(host)
+    if workday:
+        tenant, datacenter = workday.groups()
+        # .../en-US/CareerSite/job/... — the locale is optional, the site is
+        # whatever follows it.
+        segments = parts[1:] if _LOCALE_RE.match(first) else parts
+        if not segments:
+            return None
+        site = segments[0]
+        if site.lower() in _BAD_TOKENS:
+            return None
+        return SearchToken(
+            ATSProvider.workday, f"{tenant}:{datacenter}:{site}", url
+        )
     return None
 
 
@@ -108,10 +146,17 @@ def extract_tokens(items: list[dict]) -> list[SearchToken]:
 
 
 def build_queries(roles: list[str] | None = None) -> list[tuple[ATSProvider, str, str]]:
+    """One query per (host, role), ordered role-major.
+
+    The caller truncates this list to the query budget, so the ordering is
+    load-bearing: grouping by host meant the budget was spent entirely on
+    Greenhouse and Lever, and the hosts further down were never searched at
+    all. Interleaving gives every provider a share of whatever budget exists.
+    """
     role_terms = roles or _DEFAULT_ROLES
     queries: list[tuple[ATSProvider, str, str]] = []
-    for provider, host in _PROVIDER_HOSTS:
-        for role in role_terms:
+    for role in role_terms:
+        for provider, host in _PROVIDER_HOSTS:
             queries.append((provider, host, f'site:{host} "{role}"'))
     return queries
 
@@ -188,6 +233,10 @@ async def _probe_token(
         return await _probe_lever(client, identifier)
     if provider == ATSProvider.ashby:
         return await _probe_ashby(client, identifier)
+    if provider == ATSProvider.smartrecruiters:
+        return await _probe_smartrecruiters(client, identifier)
+    if provider == ATSProvider.workday:
+        return await _probe_workday(client, identifier)
     return None
 
 

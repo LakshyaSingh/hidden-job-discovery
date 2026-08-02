@@ -66,7 +66,9 @@ class Settings(BaseSettings):
 
     # Brave Search for ATS board-token harvesting.
     brave_search_api_key: str = ""
-    brave_search_max_queries: int = 30
+    # One query per (host, role): 6 hosts x 8 roles. The full sweep runs weekly,
+    # so ~200 queries a month, well inside Brave's free allowance.
+    brave_search_max_queries: int = 48
 
     # Per-domain politeness: minimum seconds between requests to the same host.
     request_min_interval_seconds: float = 0.5
