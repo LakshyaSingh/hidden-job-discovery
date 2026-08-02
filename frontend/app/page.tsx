@@ -107,24 +107,15 @@ export default function Dashboard() {
 
       <div className="container fade-in">
         <section className="masthead">
-          <div className="masthead-lead">
-            <span className="eyebrow">Live from company career portals</span>
-            <h1 className="display">
-              New roles,
-              <br />
-              before the boards.
-            </h1>
-            <p className="lede">
-              Jobs pulled straight from company ATS portals, surfaced before they
-              reach LinkedIn or Indeed.
-            </p>
-          </div>
-          <div className="masthead-stat">
-            <span className="stat-num">
-              {loading ? "…" : total.toLocaleString()}
-            </span>
-            <span className="eyebrow">{total === 1 ? "role matched" : "roles matched"}</span>
-          </div>
+          <h1 className="display">
+            New roles,
+            <br />
+            before the boards.
+          </h1>
+          <p className="lede">
+            Jobs pulled straight from company ATS portals, surfaced before they
+            reach LinkedIn or Indeed.
+          </p>
         </section>
 
         <div className="toolbar">
@@ -139,7 +130,7 @@ export default function Dashboard() {
 
           <div className="toolbar-row">
             <div className="field">
-              <span className="eyebrow">Experience</span>
+              <span className="label">Experience</span>
               <div className="exp-group">
                 <input
                   className="control exp"
@@ -154,7 +145,7 @@ export default function Dashboard() {
                     )
                   }
                 />
-                <span className="eyebrow">to</span>
+                <span className="label">to</span>
                 <input
                   className="control exp"
                   type="number"
@@ -244,6 +235,14 @@ export default function Dashboard() {
               </span>
             </div>
           </div>
+        </div>
+
+        {/* The match count reads better as a quiet line above the list than
+            as a display-sized number in the masthead. */}
+        <div className="results-head">
+          {loading
+            ? "Loading"
+            : `${total.toLocaleString()} ${total === 1 ? "role" : "roles"}`}
         </div>
 
         <div className="results">

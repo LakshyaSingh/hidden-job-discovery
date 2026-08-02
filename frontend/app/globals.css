@@ -1,48 +1,31 @@
 /* ============================================================================
-   Hidden Job Discovery — editorial-luxury theme.
-   Dark-locked. High-contrast serif display (Playfair) + Manrope for UI/data.
-   One accent (warm sand). One shape system: pill for all interactive controls,
-   hairline dividers for structure. No em-dashes anywhere in UI copy.
+   Hidden Job Discovery — Apple-style minimal, dark.
+   One neutral sans (SF Pro where it exists, Inter everywhere else). Hierarchy
+   comes from size, weight and grey, never from tracking, serifs or ornament.
+   One accent (system blue) reserved for the primary action and active state.
+   Exactly one translucent surface: the nav bar. Everything else is flat.
    ============================================================================ */
 
 :root {
-  --bg: #100f0d; /* warm near-black (not pure #000) */
-  --bg-raise: #17150f; /* barely-there lift for hover surfaces */
-  --ink: #f4f1ea; /* warm off-white, primary text */
-  --muted: #a89f90; /* warm taupe, secondary text */
-  --faint: #6f685c; /* faint labels / placeholders */
-  --line: rgba(244, 241, 234, 0.13); /* hairline */
-  --line-strong: rgba(244, 241, 234, 0.28);
-  --accent: #c9b295; /* warm sand, used consistently for emphasis */
+  --bg: #000000;
+  --surface: #1d1d1f; /* the only raised fill: inputs, chips, cards */
+  --surface-hover: #2a2a2c;
+  --ink: #f5f5f7; /* primary text */
+  --muted: #86868b; /* secondary text, meta, placeholders */
+  --line: rgba(245, 245, 247, 0.11); /* list dividers, kept quiet at length */
+  --line-strong: #424245; /* borders that need to actually read */
+  --accent: #2997ff; /* system blue, dark-mode variant */
+  --accent-hover: #47a5ff;
 
-  --font-display: var(--font-serif), Georgia, "Times New Roman", serif;
-  --font-body: var(--font-sans), -apple-system, BlinkMacSystemFont, sans-serif;
-  --pill: 999px;
-  --maxw: 1200px;
+  /* SF Pro on Apple hardware, Inter (loaded in layout.tsx) everywhere else. */
+  --font-body:
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
+    var(--font-sans), "Helvetica Neue", Arial, sans-serif;
 
-  /* ---- Liquid glass -----------------------------------------------------
-     Optical tuning lives in tokens so every glass surface relights from one
-     place (a :hover only has to change --glass-brightness). This theme is
-     dark-locked, so these are the visionOS dark values: deeper blur, richer
-     saturation, brighter material, very low background alpha. */
-  --glass-blur: 18px;
-  --glass-saturate: 155%;
-  --glass-brightness: 1.16;
-  --glass-contrast: 1; /* keep at 1; above 1 the backdrop punches through */
-  --glass-radius: 24px;
-  --glass-ease: cubic-bezier(0.16, 1, 0.3, 1);
-
-  /* Warm-tinted glass, so the material belongs to the sand/ink palette
-     rather than reading as generic white frost. */
-  --glass-tint: rgba(244, 241, 234, 0.05);
-  --glass-tint-raise: rgba(244, 241, 234, 0.08);
-
-  /* Ambient bloom hues as "H S% L%" so alpha can vary per blob. Warm-led
-     (sand, ember) with two cool anchors for depth. */
-  --bloom-1: 36 82% 58%; /* sand */
-  --bloom-2: 18 74% 46%; /* ember */
-  --bloom-3: 288 42% 44%; /* plum */
-  --bloom-4: 196 58% 40%; /* deep teal */
+  --pill: 980px; /* Apple's button radius */
+  --radius: 12px;
+  --maxw: 980px; /* Apple's content column */
+  --nav-h: 48px;
 }
 
 * {
@@ -59,8 +42,9 @@ body {
   background: var(--bg);
   color: var(--ink);
   font-family: var(--font-body);
-  font-size: 15px;
-  line-height: 1.55;
+  font-size: 17px;
+  line-height: 1.47;
+  letter-spacing: -0.01em;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
@@ -70,390 +54,177 @@ a {
   text-decoration: none;
 }
 
-/* ---- Ambient bloom field ----------------------------------------------
-   Glass has nothing to refract over a flat background, so on a near-black
-   page a perfect material is invisible. This fixed layer of slow, heavily
-   blurred blooms is what the chrome above it bends and tints. It sits at
-   z-index 0, never takes pointer events, and everything else sits above it.
-   Markup lives in app/GlassBackdrop.tsx. */
-.ambient {
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  overflow: hidden;
-}
-
-.ambient .blob {
-  position: absolute;
-  width: 44vmax;
-  height: 44vmax;
-  border-radius: 50%;
-  filter: blur(76px);
-  /* Higher than the usual dark-mode 0.11: the page sits on a warm near-black,
-     so at 0.11 the blooms are gone and the glass has nothing to work with.
-     If they ever read as individually recognisable circles, come back down. */
-  opacity: 0.22;
-  will-change: transform;
-}
-
-.ambient .b1 {
-  top: -14%;
-  left: -10%;
-  background: radial-gradient(circle, hsl(var(--bloom-1) / 0.6), transparent 62%);
-  animation: bloom-a 24s var(--glass-ease) infinite;
-}
-
-.ambient .b2 {
-  top: -8%;
-  right: -12%;
-  background: radial-gradient(circle, hsl(var(--bloom-2) / 0.55), transparent 62%);
-  animation: bloom-b 28s var(--glass-ease) infinite;
-}
-
-.ambient .b3 {
-  bottom: -16%;
-  left: 8%;
-  background: radial-gradient(circle, hsl(var(--bloom-3) / 0.5), transparent 62%);
-  animation: bloom-a 32s var(--glass-ease) infinite reverse;
-}
-
-.ambient .b4 {
-  bottom: -12%;
-  right: 4%;
-  background: radial-gradient(circle, hsl(var(--bloom-4) / 0.45), transparent 62%);
-  animation: bloom-b 26s var(--glass-ease) infinite;
-}
-
-@keyframes bloom-a {
-  0%,
-  100% {
-    transform: translate3d(0, 0, 0);
-  }
-  50% {
-    transform: translate3d(4vw, 3vh, 0);
-  }
-}
-
-@keyframes bloom-b {
-  0%,
-  100% {
-    transform: translate3d(0, 0, 0);
-  }
-  50% {
-    transform: translate3d(-3vw, 4vh, 0);
-  }
-}
-
-/* Tracked small-caps label used for eyebrows, meta, field labels. */
-.eyebrow {
-  font-family: var(--font-body);
-  text-transform: uppercase;
-  letter-spacing: 0.2em;
-  font-size: 10.5px;
-  font-weight: 500;
-  color: var(--muted);
-}
-
-/* z-index 1 clears the bloom field. The sticky bar deliberately gets a much
-   higher one: backdrop-filter can only filter what paints below it, and a bar
-   tied at z-index 1 with the content loses the tie on DOM order and renders
-   as a transparent strip with text scrolling across it. */
 .container {
-  position: relative;
-  z-index: 1;
   max-width: var(--maxw);
   margin: 0 auto;
-  padding: 8px 32px 120px;
+  padding: 0 22px 120px;
 }
 
-/* ---- Top bar (glass) ---------------------------------------------------
-   A full-bleed bar has no rim on three of its four sides, so its entire edge
-   read comes from the bottom: bright inset hairline on top, a slightly
-   stronger bottom border, a soft drop shadow, and the ::after gradient that
-   dissolves it into the page instead of ending on a hard line. */
+/* ---- Nav bar -----------------------------------------------------------
+   The one translucent surface in the whole design, and the same recipe
+   Apple ships: a heavy blur with saturation pushed up so colour scrolling
+   underneath still registers through the glass, over a high-alpha fill so
+   text stays legible whatever passes behind it. z-index has to clear the
+   content: backdrop-filter can only filter what paints below it. */
 .topbar {
   position: sticky;
   top: 0;
   z-index: 100;
-  isolation: isolate;
-  background: rgba(16, 15, 13, 0.55);
-  border-bottom: 1px solid rgba(244, 241, 234, 0.1);
-  box-shadow:
-    inset 0 0.75px 0 0 rgba(244, 241, 234, 0.14),
-    0 12px 34px -20px rgba(0, 0, 0, 0.6);
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate))
-    brightness(var(--glass-brightness)) contrast(var(--glass-contrast));
-  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate))
-    brightness(var(--glass-brightness)) contrast(var(--glass-contrast));
-}
-
-.topbar::before {
-  content: "";
-  pointer-events: none;
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  background:
-    radial-gradient(
-      ellipse 260px 120px at 90px -20px,
-      rgba(244, 241, 234, 0.16),
-      transparent 70%
-    ),
-    linear-gradient(180deg, rgba(244, 241, 234, 0.05) 0px, transparent 48px);
-}
-
-.topbar::after {
-  content: "";
-  position: absolute;
-  inset: 100% 0 auto 0;
-  height: 22px;
-  pointer-events: none;
-  background: linear-gradient(180deg, rgba(16, 15, 13, 0.5), transparent);
+  height: var(--nav-h);
+  background: rgba(0, 0, 0, 0.72);
+  border-bottom: 1px solid var(--line);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  backdrop-filter: saturate(180%) blur(20px);
 }
 
 .topbar-inner {
+  height: 100%;
   max-width: var(--maxw);
   margin: 0 auto;
-  padding: 15px 32px;
+  padding: 0 22px;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 16px;
 }
 
 .wordmark {
-  font-family: var(--font-display);
-  font-size: 19px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  font-weight: 500;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
 }
 
 .topbar-actions {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
 }
 
-/* ---- Buttons (pill) --------------------------------------------------- */
+/* ---- Buttons ------------------------------------------------------------ */
 .btn {
-  font-family: var(--font-body);
-  font-size: 11px;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
   border-radius: var(--pill);
-  padding: 11px 22px;
+  padding: 7px 16px;
   cursor: pointer;
   border: 1px solid transparent;
   transition:
-    transform 0.15s ease,
     background 0.2s ease,
     color 0.2s ease,
-    border-color 0.2s ease;
-}
-
-.btn:active {
-  transform: translateY(1px);
+    opacity 0.2s ease;
 }
 
 .btn.primary {
-  background: var(--ink);
-  color: var(--bg);
+  background: var(--accent);
+  color: #fff;
 }
 
 .btn.primary:hover {
-  background: var(--accent);
+  background: var(--accent-hover);
 }
 
-/* Sits on the glass bar, so it gets a plain translucent fill and its own
-   hairline. Never a second backdrop-filter: glass inside glass samples the
-   already-filtered output and compounds into mud. */
 .btn.ghost {
-  background: var(--glass-tint);
-  border-color: var(--line-strong);
+  background: rgba(245, 245, 247, 0.1);
   color: var(--ink);
-  box-shadow: inset 0 0.75px 0 0 rgba(244, 241, 234, 0.1);
 }
 
 .btn.ghost:hover {
-  background: var(--glass-tint-raise);
-  border-color: var(--ink);
+  background: rgba(245, 245, 247, 0.16);
 }
 
 .btn:disabled {
-  opacity: 0.5;
+  opacity: 0.4;
   cursor: default;
 }
 
-/* ---- Masthead --------------------------------------------------------- */
+/* ---- Masthead ----------------------------------------------------------- */
 .masthead {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  align-items: end;
-  gap: 40px;
-  padding: 56px 0 40px;
-  border-bottom: 1px solid var(--line);
-}
-
-.masthead .eyebrow {
-  display: block;
-  margin-bottom: 18px;
+  padding: 72px 0 44px;
 }
 
 .display {
-  font-family: var(--font-display);
-  font-weight: 500;
-  font-size: clamp(38px, 5.4vw, 68px);
-  line-height: 1.02;
-  letter-spacing: -0.01em;
+  font-size: clamp(38px, 5vw, 56px);
+  line-height: 1.07;
+  font-weight: 600;
+  letter-spacing: -0.022em;
   margin: 0;
 }
 
 .lede {
   color: var(--muted);
-  font-size: 15px;
-  max-width: 46ch;
-  margin: 20px 0 0;
+  font-size: 21px;
+  line-height: 1.38;
+  letter-spacing: -0.012em;
+  max-width: 44ch;
+  margin: 18px 0 0;
 }
 
-.masthead-stat {
-  text-align: right;
-  white-space: nowrap;
-}
-
-.stat-num {
-  display: block;
-  font-family: var(--font-display);
-  font-size: clamp(48px, 6vw, 80px);
-  line-height: 0.9;
-  font-weight: 500;
-}
-
-.masthead-stat .eyebrow {
-  display: block;
-  margin-top: 12px;
-}
-
-/* ---- Toolbar (glass panel) ---------------------------------------------
-   The one elevated surface on the page. isolation:isolate creates the
-   stacking context the z-index:-1 specular and grain layers need; without it
-   they escape behind the panel and vanish. */
+/* ---- Toolbar -----------------------------------------------------------
+   Flat by design. Structure comes from spacing and one hairline, not from a
+   panel, a border or a shadow. */
 .toolbar {
-  position: relative;
-  isolation: isolate;
-  overflow: hidden;
-  margin: 28px 0 12px;
-  padding: 24px;
-  border-radius: var(--glass-radius);
-  border: 1px solid rgba(244, 241, 234, 0.13);
-  background: var(--glass-tint);
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate))
-    brightness(var(--glass-brightness)) contrast(var(--glass-contrast));
-  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate))
-    brightness(var(--glass-brightness)) contrast(var(--glass-contrast));
-  /* Meniscus: the top/bottom asymmetry is what sells a curved edge on a
-     flat div, then two wide ambient shadows lift it off the page. */
-  box-shadow:
-    inset 0 1px 0 0 rgba(244, 241, 234, 0.2),
-    inset 0.5px 0 0 0 rgba(244, 241, 234, 0.06),
-    inset -0.5px 0 0 0 rgba(244, 241, 234, 0.04),
-    inset 0 -0.75px 0 0 rgba(244, 241, 234, 0.05),
-    0 28px 68px -26px rgba(0, 0, 0, 0.65);
+  padding: 0 0 28px;
+  border-bottom: 1px solid var(--line);
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 14px;
 }
 
-/* Specular: a bright lobe where the light hits, a short sheen off the top
-   edge, and a faint glow on the shadowed side. In dark glass all three go
-   white-on-low-alpha; there is no bright environment to cast a dark side. */
-.toolbar::before {
-  content: "";
-  pointer-events: none;
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  z-index: -1;
-  background:
-    radial-gradient(
-      ellipse 220px 110px at 70px -10px,
-      rgba(244, 241, 234, 0.18),
-      transparent 70%
-    ),
-    linear-gradient(180deg, rgba(244, 241, 234, 0.06) 0px, transparent 64px),
-    radial-gradient(
-      ellipse 200px 100px at calc(100% - 60px) calc(100% + 20px),
-      rgba(201, 178, 149, 0.06),
-      transparent 65%
-    );
-  opacity: 0.95;
+.label {
+  font-size: 14px;
+  color: var(--muted);
 }
 
-/* A trace of fractal noise kills the plasticky perfect smoothness of pure
-   CSS gradients. Above ~0.06 it reads as dirt rather than as glass. */
-.toolbar::after {
-  content: "";
-  pointer-events: none;
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  z-index: -1;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.45'/%3E%3C/svg%3E");
-  mix-blend-mode: overlay;
-  opacity: 0.04;
-}
-
-/* Controls live inside the glass panel, so they take a plain translucent
-   fill and a hairline instead of a filter of their own. */
 .control {
-  font-family: var(--font-body);
-  background: var(--glass-tint);
-  border: 1px solid var(--line);
+  font-family: inherit;
+  font-size: 14px;
+  letter-spacing: -0.01em;
+  background: var(--surface);
+  border: 1px solid transparent;
   color: var(--ink);
-  border-radius: var(--pill);
-  padding: 11px 18px;
-  font-size: 13px;
-  box-shadow: inset 0 0.75px 0 0 rgba(244, 241, 234, 0.08);
+  border-radius: var(--radius);
+  padding: 9px 14px;
   transition:
-    border-color 0.2s ease,
-    background 0.2s ease;
+    background 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
 .control::placeholder {
-  color: var(--faint);
+  color: var(--muted);
 }
 
 .control:hover {
-  background: var(--glass-tint-raise);
+  background: var(--surface-hover);
 }
 
 .control:focus {
   outline: none;
-  border-color: var(--accent);
-  background: var(--glass-tint-raise);
+  box-shadow: 0 0 0 4px rgba(41, 151, 255, 0.35);
 }
 
 .search {
   width: 100%;
-  font-size: 15px;
-  padding: 15px 22px;
+  font-size: 17px;
+  padding: 13px 18px;
 }
 
 select.control {
   appearance: none;
   -webkit-appearance: none;
-  padding-right: 38px;
+  padding-right: 34px;
   cursor: pointer;
-  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="10" height="6" viewBox="0 0 10 6" fill="none" stroke="%23a89f90" stroke-width="1.3"><path d="M1 1l4 4 4-4"/></svg>');
+  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="10" height="6" viewBox="0 0 10 6" fill="none" stroke="%2386868b" stroke-width="1.4"><path d="M1 1l4 4 4-4"/></svg>');
   background-repeat: no-repeat;
-  background-position: right 16px center;
+  background-position: right 13px center;
 }
 
 .toolbar-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
 
 .field {
@@ -469,11 +240,11 @@ select.control {
 }
 
 .exp {
-  width: 76px;
+  width: 72px;
   text-align: center;
 }
 
-/* strip number spinners for a cleaner look */
+/* strip number spinners */
 .exp::-webkit-outer-spin-button,
 .exp::-webkit-inner-spin-button {
   -webkit-appearance: none;
@@ -490,20 +261,17 @@ select.control {
 
 .chips {
   display: inline-flex;
-  gap: 10px;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
 .chip {
-  font-family: var(--font-body);
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  font-size: 10.5px;
+  font-family: inherit;
+  font-size: 13px;
+  letter-spacing: -0.01em;
   border-radius: var(--pill);
-  padding: 10px 16px;
-  border: 1px solid var(--line);
-  background: var(--glass-tint);
-  box-shadow: inset 0 0.75px 0 0 rgba(244, 241, 234, 0.08);
+  padding: 7px 14px;
+  border: 1px solid var(--line-strong);
   color: var(--muted);
   cursor: pointer;
   user-select: none;
@@ -515,29 +283,31 @@ select.control {
 
 .chip:hover {
   color: var(--ink);
-  background: var(--glass-tint-raise);
+  border-color: var(--muted);
 }
 
-/* Selected states go opaque. Glass on an active control reads as disabled. */
 .chip.active {
-  color: var(--bg);
+  color: #fff;
   background: var(--accent);
   border-color: var(--accent);
 }
 
-/* ---- Job list --------------------------------------------------------- */
-.results {
-  margin-top: 8px;
+/* ---- Result count ------------------------------------------------------- */
+.results-head {
+  padding: 20px 0 4px;
+  font-size: 14px;
+  color: var(--muted);
 }
 
+/* ---- Job list ----------------------------------------------------------- */
 .job {
-  padding: 30px 0;
+  padding: 24px 0;
   border-bottom: 1px solid var(--line);
   transition: opacity 0.2s ease;
 }
 
 .job.applied {
-  opacity: 0.48;
+  opacity: 0.45;
 }
 
 .job-head {
@@ -549,95 +319,85 @@ select.control {
 
 .tag-new {
   display: inline-block;
-  font-size: 9.5px;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
+  font-size: 13px;
+  font-weight: 500;
   color: var(--accent);
-  margin-bottom: 8px;
+  margin-bottom: 4px;
 }
 
 .job-title {
-  font-family: var(--font-display);
-  font-weight: 500;
-  font-size: clamp(20px, 2.3vw, 27px);
-  line-height: 1.1;
+  font-size: 19px;
+  font-weight: 600;
+  line-height: 1.26;
+  letter-spacing: -0.014em;
   margin: 0;
-  letter-spacing: -0.005em;
 }
 
-.job-title a {
-  transition: color 0.2s ease;
-}
-
-.job:hover .job-title a {
+.job-title a:hover {
   color: var(--accent);
 }
 
 .job-company {
-  margin-top: 8px;
-  text-transform: uppercase;
-  letter-spacing: 0.16em;
-  font-size: 11px;
+  margin-top: 3px;
+  font-size: 15px;
   color: var(--muted);
 }
 
 .job-company a {
-  color: var(--faint);
-  border-bottom: 1px solid var(--line);
-  padding-bottom: 1px;
+  color: var(--accent);
 }
 
 .job-company a:hover {
-  color: var(--ink);
+  text-decoration: underline;
 }
 
 .job-posted {
-  text-align: right;
   flex-shrink: 0;
+  font-size: 14px;
+  color: var(--muted);
+  white-space: nowrap;
 }
 
 .job-meta {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 14px;
-  margin-top: 16px;
-}
-
-.job-meta span {
-  text-transform: uppercase;
-  letter-spacing: 0.14em;
-  font-size: 10.5px;
+  gap: 8px;
+  margin-top: 12px;
+  font-size: 14px;
   color: var(--muted);
-  position: relative;
 }
 
-/* hairline separators between meta items (no dots) */
-.job-meta span + span {
-  padding-left: 14px;
-  border-left: 1px solid var(--line);
+/* Interpuncts between meta items rather than rules: quieter at list length. */
+.job-meta span + span::before {
+  content: "·";
+  margin-right: 8px;
+}
+
+.job-meta span:first-child {
+  text-transform: capitalize;
 }
 
 .job-skills {
-  margin-top: 14px;
+  margin-top: 12px;
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
 }
 
 .job-skills span {
-  font-size: 11px;
-  color: var(--faint);
-  border: 1px solid var(--line);
+  font-size: 13px;
+  color: var(--muted);
+  background: var(--surface);
   border-radius: var(--pill);
-  padding: 3px 12px;
+  padding: 4px 11px;
 }
 
 .job-actions {
-  margin-top: 20px;
+  margin-top: 16px;
   display: flex;
   align-items: center;
-  gap: 22px;
+  gap: 20px;
 }
 
 .action {
@@ -645,10 +405,9 @@ select.control {
   border: none;
   padding: 0;
   cursor: pointer;
-  font-family: var(--font-body);
-  text-transform: uppercase;
-  letter-spacing: 0.16em;
-  font-size: 10.5px;
+  font-family: inherit;
+  font-size: 14px;
+  letter-spacing: -0.01em;
   color: var(--muted);
   transition: color 0.2s ease;
 }
@@ -662,54 +421,44 @@ select.control {
 }
 
 .action:disabled {
-  opacity: 0.5;
+  opacity: 0.4;
   cursor: default;
 }
 
 .apply-link {
   margin-left: auto;
-  text-transform: uppercase;
-  letter-spacing: 0.16em;
-  font-size: 10.5px;
-  color: var(--ink);
-  border: 1px solid var(--line-strong);
+  font-size: 14px;
+  font-weight: 500;
+  background: var(--accent);
+  color: #fff;
   border-radius: var(--pill);
-  padding: 9px 20px;
-  transition:
-    background 0.2s ease,
-    color 0.2s ease,
-    border-color 0.2s ease;
+  padding: 7px 16px;
+  transition: background 0.2s ease;
 }
 
 .apply-link:hover {
-  background: var(--ink);
-  color: var(--bg);
-  border-color: var(--ink);
+  background: var(--accent-hover);
 }
 
-/* ---- Empty / loading -------------------------------------------------- */
+/* ---- Empty state -------------------------------------------------------- */
 .empty {
-  padding: 80px 0;
+  padding: 88px 0;
   text-align: center;
   color: var(--muted);
-  max-width: 52ch;
+  max-width: 46ch;
   margin: 0 auto;
-  font-size: 15px;
 }
 
 .empty b {
   color: var(--ink);
-  font-weight: 600;
+  font-weight: 500;
 }
 
-/* ---- Motion -----------------------------------------------------------
-   Opacity only, deliberately. This class wraps the whole page, and any
-   ancestor with a transform (even the finished translateY(0), since
-   animation-fill-mode keeps it applied) creates a containing block that the
-   toolbar's backdrop-filter cannot sample through. The glass would silently
-   render as a flat tint. */
+/* ---- Motion ----------------------------------------------------------
+   Opacity only. A transform here would create a containing block that the
+   nav bar's backdrop-filter cannot sample through. */
 .fade-in {
-  animation: fade-in 0.6s ease both;
+  animation: fade-in 0.5s ease both;
 }
 
 @keyframes fade-in {
@@ -728,42 +477,41 @@ select.control {
   }
 }
 
-/* ---- Responsive ------------------------------------------------------- */
+/* ---- Accessibility -----------------------------------------------------
+   Under Reduce Transparency the nav goes opaque rather than losing the
+   surface, so text contrast never depends on what is scrolling behind it. */
+@media (prefers-reduced-transparency: reduce) {
+  .topbar {
+    background: #000;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .topbar {
+    background: Canvas;
+    backdrop-filter: none;
+  }
+}
+
+/* ---- Responsive --------------------------------------------------------- */
 @media (max-width: 760px) {
+  body {
+    font-size: 16px;
+  }
   .container {
-    padding: 4px 20px 80px;
-  }
-  /* The bar is sticky now, so it costs viewport height on every scroll:
-     keep it to one line rather than letting the wordmark wrap to two. */
-  .topbar-inner {
-    padding: 13px 20px;
-  }
-  .wordmark {
-    font-size: 14px;
-    letter-spacing: 0.1em;
-  }
-  .btn {
-    padding: 10px 16px;
-    white-space: nowrap;
-  }
-  .toolbar {
-    padding: 20px 18px;
-    margin-top: 22px;
+    padding: 0 20px 80px;
   }
   .masthead {
-    grid-template-columns: 1fr;
-    align-items: start;
-    gap: 28px;
+    padding: 44px 0 32px;
   }
-  .masthead-stat {
-    text-align: left;
+  .lede {
+    font-size: 18px;
   }
   .job-head {
     flex-direction: column;
-    gap: 10px;
-  }
-  .job-posted {
-    text-align: left;
+    gap: 6px;
   }
   .job-actions {
     flex-wrap: wrap;
@@ -771,106 +519,5 @@ select.control {
   }
   .apply-link {
     margin-left: 0;
-  }
-}
-
-/* ============================================================================
-   Liquid glass: refraction, accessibility, cost caps.
-   Keep this block LAST: the Safari cap has to win the cascade.
-   ============================================================================ */
-
-/* ---- Refraction (Chromium only, progressive enhancement) ---------------
-   Frost diffuses the backdrop; glass moves it. feDisplacementMap offsets the
-   backdrop hardest at the rim and not at all in the middle, which is what a
-   real lens does. Filter defs live in app/GlassBackdrop.tsx.
-
-   Two details matter here: url() comes FIRST so it bends a sharp backdrop
-   rather than an already-mushy one, and the blur drops to 1px because the
-   displacement is carrying the effect. Safari and Firefox skip this block
-   and keep the frosted material above, which is a fine outcome.
-
-   Both surfaces use the bend-only filter. #liquidGlassDisp splits the RGB
-   channels, which along the bar's long straight bottom edge would separate
-   into a visible colored streak. */
-@supports (backdrop-filter: url(#liquidGlass)) or
-  (-webkit-backdrop-filter: url(#liquidGlass)) {
-  /* Nothing scrolls behind the toolbar, only the bloom field, so it takes the
-     canonical blur(1px): the displacement carries the whole optical read and
-     a big blur would just drown it. */
-  .toolbar {
-    -webkit-backdrop-filter: url(#liquidGlass) blur(1px)
-      saturate(var(--glass-saturate)) brightness(var(--glass-brightness));
-    backdrop-filter: url(#liquidGlass) blur(1px) saturate(var(--glass-saturate))
-      brightness(var(--glass-brightness));
-  }
-  /* The bar has dense job-list text passing under it, and at blur(1px) that
-     text stays legible through the glass and fights the bar's own label. Keep
-     enough blur to diffuse it; the rim bend still comes from the filter. */
-  .topbar {
-    -webkit-backdrop-filter: url(#liquidGlass) blur(12px)
-      saturate(var(--glass-saturate)) brightness(var(--glass-brightness));
-    backdrop-filter: url(#liquidGlass) blur(12px) saturate(var(--glass-saturate))
-      brightness(var(--glass-brightness));
-  }
-}
-
-/* ---- Reduce Transparency ------------------------------------------------
-   Apple's own behavior is to thicken the material, not remove it: more blur,
-   less saturation, much higher background alpha, so text contrast is
-   guaranteed while the surface still reads as glass. */
-@media (prefers-reduced-transparency: reduce) {
-  .topbar,
-  .toolbar {
-    --glass-blur: 32px;
-    --glass-saturate: 120%;
-    -webkit-backdrop-filter: blur(var(--glass-blur))
-      saturate(var(--glass-saturate));
-    backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
-  }
-  .topbar {
-    background: rgba(16, 15, 13, 0.94);
-  }
-  .toolbar {
-    background: rgba(23, 21, 15, 0.92);
-  }
-  .toolbar::before {
-    opacity: 0.35;
-  }
-  .ambient {
-    opacity: 0.4;
-  }
-}
-
-/* Forced colors strips backdrop-filter anyway; keep a real border so the
-   surfaces do not merge into the page. */
-@media (forced-colors: active) {
-  .topbar,
-  .toolbar {
-    background: Canvas;
-    border: 1px solid CanvasText;
-    box-shadow: none;
-  }
-  .ambient {
-    display: none;
-  }
-}
-
-/* ---- Safari cost cap ----------------------------------------------------
-   WebKit re-rasterizes backdrop-filter every frame and the cost scales with
-   blur radius and with how many functions are chained, so a long scrolling
-   list under a sticky bar drops frames. This @supports test matches WebKit
-   only (hanging-punctuation is WebKit-only). Chromium keeps full fidelity. */
-@supports (hanging-punctuation: first) and (font: -apple-system-body) and
-  (-webkit-appearance: none) {
-  .topbar,
-  .toolbar {
-    -webkit-backdrop-filter: blur(8px) saturate(140%) !important;
-    backdrop-filter: blur(8px) saturate(140%) !important;
-  }
-  .topbar {
-    background-color: rgba(16, 15, 13, 0.78);
-  }
-  .toolbar {
-    background-color: rgba(23, 21, 15, 0.6);
   }
 }

@@ -67,10 +67,8 @@ export function JobCard({ job, onChange }: { job: Job; onChange: () => void }) {
           </div>
         </div>
         <div className="job-posted">
-          <span className="eyebrow">
-            posted {timeAgo(job.original_posted_at ?? job.first_discovered_at)}
-            {job.date_source === "discovered" && " (est.)"}
-          </span>
+          Posted {timeAgo(job.original_posted_at ?? job.first_discovered_at)}
+          {job.date_source === "discovered" && " (est.)"}
         </div>
       </div>
 
