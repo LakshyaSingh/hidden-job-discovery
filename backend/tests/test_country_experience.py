@@ -49,3 +49,34 @@ def test_senior_excluded_from_entry_filter():
     # The "0 to 2 years" filter uses min<=fmax; a senior floor of 5 fails it.
     lo, _ = infer_experience_from_title("Senior Product Manager")
     assert lo is not None and lo > 2
+
+
+def test_title_experience_new_seniority_signals():
+    assert infer_experience_from_title("Executive Vice President, Sales") == (14, None)
+    assert infer_experience_from_title("President, North America") == (14, None)
+    assert infer_experience_from_title("Founding Engineer") == (7, None)
+    assert infer_experience_from_title("Software Engineer III") == (4, None)
+    assert infer_experience_from_title("Data Analyst II") == (2, None)
+
+
+def test_title_experience_new_entry_signals():
+    assert infer_experience_from_title("Engineering Trainee") == (0, 1)
+    assert infer_experience_from_title("Campus Hire, Analytics") == (0, 1)
+    assert infer_experience_from_title("Early Career Software Engineer") == (0, 2)
+
+
+def test_vice_president_is_not_read_as_president():
+    """Ordering matters: the president rule sits below the vp rules."""
+    assert infer_experience_from_title("Vice President, Marketing") == (12, None)
+
+
+def test_ambiguous_titles_stay_uninferred():
+    """A wrong guess hides a job; no guess only leaves it unfiltered.
+
+    'Manager' spans an IC product manager and a director-equivalent, and
+    'Architect' spans a first solutions-architect hire and a distinguished
+    one, so neither earns a rule.
+    """
+    assert infer_experience_from_title("Product Manager") == (None, None)
+    assert infer_experience_from_title("Solutions Architect") == (None, None)
+    assert infer_experience_from_title("Software Engineer") == (None, None)

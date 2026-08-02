@@ -299,15 +299,35 @@ def is_us_location(location_raw: str | None) -> bool | None:
 
 # Fallback when a description yields no numeric range. Ordered: the first match
 # wins, so intern/grad and high-seniority terms are checked before junior terms.
+#
+# Precision matters more than recall here. The API includes jobs with no
+# inferred range in every experience filter, on the principle that a posting
+# should never be hidden for missing data — so a rule that fires wrongly
+# actively hides a job, while a rule that never fires only leaves it in the
+# unfiltered pool. That is why deliberately ambiguous words are absent:
+# "manager" spans an IC product manager and a director-equivalent, and
+# "architect" spans both a first solutions-architect role and a distinguished
+# one. Leaving them uninferred is the safer failure.
 _TITLE_EXP_RULES: list[tuple[re.Pattern, tuple[int, int | None]]] = [
-    (re.compile(r"\b(intern|internship|co-?op)\b", re.I), (0, 1)),
+    (re.compile(r"\b(intern|internship|co-?op|trainee)\b", re.I), (0, 1)),
     (re.compile(r"\b(new\s+grad|new\s+college\s+grad|graduate|entry[\s-]?level|apprentice)\b", re.I), (0, 1)),
+    (re.compile(r"\b(campus|university)\s+(hire|graduate|program)\b", re.I), (0, 1)),
+    (re.compile(r"\bearly[\s-]?career\b", re.I), (0, 2)),
     (re.compile(r"\b(chief|c[teospx]o)\b", re.I), (15, None)),
+    # Before the vp rule, which would otherwise swallow "executive vice president".
+    (re.compile(r"\b(svp|evp|senior\s+vice\s+president|executive\s+vice\s+president)\b", re.I), (14, None)),
     (re.compile(r"\b(vp|vice\s+president)\b", re.I), (12, None)),
+    # After the vp rules, so "Vice President" never lands here.
+    (re.compile(r"\bpresident\b", re.I), (14, None)),
     (re.compile(r"\b(head\s+of|director)\b", re.I), (10, None)),
     (re.compile(r"\b(principal|distinguished|fellow)\b", re.I), (8, None)),
+    (re.compile(r"\bfounding\b", re.I), (7, None)),
     (re.compile(r"\bstaff\b", re.I), (6, None)),
     (re.compile(r"\b(senior|sr\.?|lead)\b", re.I), (5, None)),
+    # Roman-numeral levels, e.g. "Software Engineer III". Open-ended on the
+    # top end: a IV is senior, but how senior varies by employer.
+    (re.compile(r"\b(iv|iii)\b", re.I), (4, None)),
+    (re.compile(r"\bii\b", re.I), (2, None)),
     (re.compile(r"\b(junior|jr\.?|associate|assistant)\b", re.I), (0, 2)),
 ]
 
