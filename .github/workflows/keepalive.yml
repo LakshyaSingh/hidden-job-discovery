@@ -1,0 +1,58 @@
+name: Keep schedules alive
+
+# GitHub disables scheduled workflows in a PUBLIC repository after 60 days with
+# no repository activity. Every cron in this repo — the crawler, the feed
+# aggregator, the weekly discovery — would stop silently, and because the thing
+# that re-enables them would itself be disabled, nothing recovers on its own.
+#
+# So: check weekly how long the repo has been quiet, and push an empty commit
+# if it is getting close to the limit. A push is repository activity and resets
+# the 60-day clock.
+#
+# Two things worth knowing:
+#   * It only commits after 45 days of genuine silence. Normal development
+#     keeps the clock reset on its own and this workflow does nothing.
+#   * When it does commit, Vercel and Render will both redeploy, since they
+#     watch pushes to main. Harmless, and only on a dormant project.
+on:
+  schedule:
+    - cron: "20 4 * * 0" # Sundays 04:20 UTC
+  workflow_dispatch: {}
+
+concurrency:
+  group: keepalive
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  keepalive:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Need the real commit history to read the last commit date.
+          fetch-depth: 0
+
+      - name: Push an empty commit if the repo has gone quiet
+        env:
+          # Commit at 45 days, comfortably ahead of GitHub's 60-day cutoff and
+          # of a missed weekly tick.
+          QUIET_DAYS_BEFORE_PING: "45"
+        run: |
+          set -euo pipefail
+          last_commit_epoch=$(git log -1 --format=%ct)
+          quiet_days=$(( ( $(date +%s) - last_commit_epoch ) / 86400 ))
+          echo "Last commit was ${quiet_days} day(s) ago."
+
+          if [ "${quiet_days}" -lt "${QUIET_DAYS_BEFORE_PING}" ]; then
+            echo "Under the ${QUIET_DAYS_BEFORE_PING}-day threshold; schedules are safe."
+            exit 0
+          fi
+
+          echo "Pushing an empty commit to reset the 60-day timer."
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit --allow-empty -m "chore: keep scheduled workflows alive"
+          git push
