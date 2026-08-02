@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Playfair_Display, Manrope } from "next/font/google";
+import { GlassBackdrop } from "./GlassBackdrop";
 import "./globals.css";
 
 // Editorial display serif (high-contrast, luxury) + clean grotesque for UI/data.
@@ -26,7 +27,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={`${serif.variable} ${sans.variable}`}>
-      <body>{children}</body>
+      <body>
+        <GlassBackdrop />
+        {children}
+      </body>
     </html>
   );
 }
