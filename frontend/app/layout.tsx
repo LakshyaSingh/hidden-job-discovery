@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
-import { GlassFilter } from "./GlassFilter";
 import "./globals.css";
 
 // SF Pro is used where it exists (see --font-body in globals.css); Inter is
@@ -24,10 +23,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={sans.variable}>
-      <body>
-        <GlassFilter />
-        {children}
-      </body>
+      <body>{children}</body>
     </html>
   );
 }

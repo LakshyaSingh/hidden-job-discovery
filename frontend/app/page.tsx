@@ -9,6 +9,7 @@ import {
   LocationType,
 } from "@/lib/api";
 import { JobCard } from "./JobCard";
+import { GlassBar } from "./GlassBar";
 
 const LOCATION_TYPES: LocationType[] = ["remote", "hybrid", "onsite"];
 
@@ -94,16 +95,14 @@ export default function Dashboard() {
     <>
       {/* Outside .container so the glass bar spans the viewport, and above it
           in the stacking order so it filters the content scrolling beneath. */}
-      <header className="topbar">
-        <div className="topbar-inner">
-          <span className="wordmark">Hidden Job Discovery</span>
-          <div className="topbar-actions">
-            <button className="btn ghost" onClick={runCrawl} disabled={crawling}>
-              {crawling ? "Crawling…" : "Run crawl"}
-            </button>
-          </div>
+      <GlassBar>
+        <span className="wordmark">Hidden Job Discovery</span>
+        <div className="topbar-actions">
+          <button className="btn ghost" onClick={runCrawl} disabled={crawling}>
+            {crawling ? "Crawling…" : "Run crawl"}
+          </button>
         </div>
-      </header>
+      </GlassBar>
 
       <div className="container fade-in">
         <section className="masthead">
