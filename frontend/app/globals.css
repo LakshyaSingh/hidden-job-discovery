@@ -70,11 +70,54 @@ a {
   position: sticky;
   top: 0;
   z-index: 100;
+  /* creates the stacking context the z-index:-1 specular layer needs;
+     without it the layer escapes behind the bar and never renders */
+  isolation: isolate;
   height: var(--nav-h);
   background: rgba(0, 0, 0, 0.72);
   border-bottom: 1px solid var(--line);
+  /* The meniscus. A full-bleed bar has no rim on its left, right or top
+     sides, so the whole curved-edge read is one bright inset hairline along
+     the top played against the bottom border. The usual wide ambient shadow
+     underneath is pointless here: a dark shadow over a #000 page is
+     invisible, so the ::after gradient does that job instead. */
+  box-shadow: inset 0 0.5px 0 0 rgba(245, 245, 247, 0.1);
   -webkit-backdrop-filter: saturate(180%) blur(20px);
   backdrop-filter: saturate(180%) blur(20px);
+}
+
+/* Specular: one light source entering at the top left and fading out by
+   mid-width. Sized in percentages so it stays proportional at any viewport,
+   and deliberately not a full-width sheen across the top edge, which is what
+   turns a directional highlight into an all-over shimmer. */
+.topbar::before {
+  content: "";
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(
+      ellipse 45% 320% at 0% -80%,
+      rgba(245, 245, 247, 0.11),
+      transparent 68%
+    ),
+    radial-gradient(
+      ellipse 16% 200% at 6% -40%,
+      rgba(245, 245, 247, 0.07),
+      transparent 72%
+    );
+}
+
+/* Dissolves the bottom edge into the page: content passing just below the
+   bar is dimmed for 18px instead of emerging against a hard line. */
+.topbar::after {
+  content: "";
+  position: absolute;
+  inset: 100% 0 auto 0;
+  height: 18px;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.55), transparent);
 }
 
 .topbar-inner {
@@ -477,9 +520,34 @@ select.control {
   }
 }
 
+/* ---- Refraction --------------------------------------------------------
+   Frost diffuses the backdrop; glass moves it. The SVG filter displaces what
+   is behind the bar hardest at its edges and not at all through the middle,
+   so content scrolling under the rim bends the way it would through a real
+   lens. Filter def lives in app/GlassFilter.tsx.
+
+   url() comes first in the chain so it bends a sharp backdrop rather than an
+   already-blurred one. The blur then drops from 20px to 14px: the canonical
+   1px would let the displacement carry everything, but dense job-list text
+   passing under a bar this thin has to actually be diffused, not just bent.
+
+   Chromium only, and deliberately scoped to this one surface. url() filters
+   run on the CPU rather than the compositor, so they are re-evaluated every
+   frame while anything behind them moves. One bar is cheap; a list of them
+   would not be. */
+@supports (backdrop-filter: url(#liquidGlass)) or
+  (-webkit-backdrop-filter: url(#liquidGlass)) {
+  .topbar {
+    -webkit-backdrop-filter: url(#liquidGlass) blur(14px) saturate(180%);
+    backdrop-filter: url(#liquidGlass) blur(14px) saturate(180%);
+  }
+}
+
 /* ---- Accessibility -----------------------------------------------------
    Under Reduce Transparency the nav goes opaque rather than losing the
-   surface, so text contrast never depends on what is scrolling behind it. */
+   surface, so text contrast never depends on what is scrolling behind it.
+   Declared after the refraction block on purpose, so it wins the cascade
+   and the displacement filter is dropped along with the blur. */
 @media (prefers-reduced-transparency: reduce) {
   .topbar {
     background: #000;
