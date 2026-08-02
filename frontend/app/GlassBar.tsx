@@ -27,22 +27,24 @@ const NAV_OPTICS: Partial<GlassOptics> = {
   clipToShape: true,
   softEdge: true,
 
-  // Lensing. depth keeps the bend in a band at the rim so the middle of the
-  // bar stays optically neutral, which also gates curvature to near nothing.
-  depth: 0.42,
-  curvature: 0.1,
-  bend: 0.7,
+  // Lensing. depth is high so the bend reaches most of the way across the
+  // bar. Confining it to a rim band leaves the middle optically dead, and on
+  // a surface only 48px tall the middle is nearly all of it.
+  depth: 0.8,
+  curvature: 0.18,
+  bend: 0.75,
   bendWidth: 0.16,
-  dispersion: 0.4,
+  dispersion: 0.55,
   splay: 0.08,
-  // ~6px of displacement on each axis, given the bar's aspect ratio.
-  scaleX: 0.006,
-  scaleY: 0.11,
+  // ~8px of displacement on each axis, given the bar's aspect ratio.
+  scaleX: 0.008,
+  scaleY: 0.15,
   strength: 0.09, // fallback for any axis the overrides do not cover
 
-  // Material. The dark tint lives in CSS (.topbar-glass) so text contrast is
-  // tunable without touching the optics.
-  frost: 9,
+  // Material. Frost stays low: it blurs the source BEFORE refraction, so
+  // every extra pixel of it is displacement you paid for and cannot see.
+  // The tint lives in CSS (.topbar-glass) so contrast is tunable separately.
+  frost: 3,
   saturate: 1.5,
   brightness: 0,
 
