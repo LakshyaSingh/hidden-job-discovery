@@ -12,6 +12,7 @@ import logging
 from collections.abc import Callable
 from datetime import datetime, timezone
 
+import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -23,6 +24,23 @@ from app.services.ingest import ingest_jobs
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
+
+# Consecutive "board is gone" responses before a company is deactivated. At an
+# hourly crawl this is a few hours of a board being definitively absent, which
+# no live board does.
+DEAD_BOARD_THRESHOLD = 5
+
+# Statuses that mean the board no longer exists, as opposed to the ATS having a
+# bad minute. Only these retire a company.
+_GONE_STATUSES = {404, 410}
+
+
+def _is_board_gone(exc: BaseException) -> bool:
+    return (
+        isinstance(exc, httpx.HTTPStatusError)
+        and exc.response is not None
+        and exc.response.status_code in _GONE_STATUSES
+    )
 
 
 async def crawl_company(session: AsyncSession, company: Company) -> CrawlRun:
@@ -44,14 +62,30 @@ async def crawl_company(session: AsyncSession, company: Company) -> CrawlRun:
         run.jobs_updated = stats.updated
         run.jobs_closed = stats.closed
         run.ok = True
+        if company.consecutive_missing:
+            # The board answered, so whatever made it 404 before is over.
+            company.consecutive_missing = 0
     except Exception as exc:  # noqa: BLE001 — record & continue to next company
         logger.exception("crawl failed for %s", company.name)
         # Roll back the poisoned transaction so the next company (and the
         # CrawlRun write below) start from a clean session.
         await session.rollback()
         run = await session.merge(run)
+        company = await session.merge(company)
         run.ok = False
         run.error = str(exc)[:2000]
+
+        if _is_board_gone(exc):
+            company.consecutive_missing += 1
+            if company.consecutive_missing >= DEAD_BOARD_THRESHOLD:
+                company.active = False
+                logger.warning(
+                    "deactivating %s (%s/%s): board gone for %d consecutive crawls",
+                    company.name,
+                    company.ats_provider.value,
+                    company.ats_identifier,
+                    company.consecutive_missing,
+                )
     finally:
         run.finished_at = datetime.now(timezone.utc)
         await session.commit()

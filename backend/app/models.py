@@ -79,6 +79,11 @@ class Company(Base):
     ats_identifier: Mapped[str] = mapped_column(String(255), nullable=False)
     careers_url: Mapped[Optional[str]] = mapped_column(String(1024))
     active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # Crawls in a row that found this board gone (404/410). Transient errors do
+    # not count. Crossing DEAD_BOARD_THRESHOLD deactivates the company.
+    consecutive_missing: Mapped[int] = mapped_column(
+        Integer, default=0, server_default="0", nullable=False
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

@@ -1,6 +1,7 @@
 """Crawl orchestration: which companies get swept, and concurrently."""
 import asyncio
 
+import httpx
 import pytest
 from sqlalchemy import select
 
@@ -119,3 +120,77 @@ async def test_crawl_is_concurrent_and_isolates_failures(
     failed = [r for r in runs if not r.ok]
     assert len(failed) == 1
     assert "board returned 500" in failed[0].error
+
+
+class _Gone:
+    """A board that answers 404 — the company moved off this ATS."""
+
+    def __init__(self, status: int = 404):
+        self._status = status
+
+    async def fetch_jobs(self, company: CompanyRef):
+        request = httpx.Request("GET", "https://boards-api.greenhouse.io/v1/boards/x")
+        response = httpx.Response(self._status, request=request)
+        raise httpx.HTTPStatusError("gone", request=request, response=response)
+
+
+async def test_dead_board_is_deactivated_after_repeated_404s(
+    session, session_factory, monkeypatch
+):
+    monkeypatch.setattr(crawl_service, "get_scraper", lambda provider: _Gone())
+    company = _company("Fal", ATSProvider.greenhouse)
+    session.add(company)
+    await session.commit()
+
+    for expected in range(1, crawl_service.DEAD_BOARD_THRESHOLD + 1):
+        await crawl_service.crawl_all(session, session_factory=session_factory)
+        await session.refresh(company)
+        assert company.consecutive_missing == expected
+
+    assert company.active is False
+
+    # Deactivated companies drop out of the sweep entirely.
+    runs = await crawl_service.crawl_all(session, session_factory=session_factory)
+    assert runs == []
+
+
+async def test_transient_errors_never_retire_a_board(
+    session, session_factory, monkeypatch
+):
+    """A 500 or a timeout is an ATS having a bad day, not a dead board."""
+
+    class _Flaky:
+        async def fetch_jobs(self, company: CompanyRef):
+            raise httpx.ConnectTimeout("timed out")
+
+    monkeypatch.setattr(crawl_service, "get_scraper", lambda provider: _Flaky())
+    company = _company("Stripe", ATSProvider.greenhouse)
+    session.add(company)
+    await session.commit()
+
+    for _ in range(crawl_service.DEAD_BOARD_THRESHOLD + 2):
+        await crawl_service.crawl_all(session, session_factory=session_factory)
+
+    await session.refresh(company)
+    assert company.consecutive_missing == 0
+    assert company.active is True
+
+
+async def test_a_recovered_board_resets_its_counter(
+    session, session_factory, monkeypatch
+):
+    company = _company("Ramp", ATSProvider.ashby)
+    session.add(company)
+    await session.commit()
+
+    monkeypatch.setattr(crawl_service, "get_scraper", lambda provider: _Gone())
+    for _ in range(3):
+        await crawl_service.crawl_all(session, session_factory=session_factory)
+    await session.refresh(company)
+    assert company.consecutive_missing == 3
+    assert company.active is True  # still under the threshold
+
+    monkeypatch.setattr(crawl_service, "get_scraper", lambda provider: _StubScraper([]))
+    await crawl_service.crawl_all(session, session_factory=session_factory)
+    await session.refresh(company)
+    assert company.consecutive_missing == 0
