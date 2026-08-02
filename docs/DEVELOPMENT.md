@@ -4,7 +4,7 @@ Moved out of the README so that page can stay about what the project is. For the
 design rationale behind any of this, see [ARCHITECTURE.md](../ARCHITECTURE.md).
 
 ```
-backend/    FastAPI + SQLAlchemy + Alembic — scrapers, aggregators, ingest, worker
+backend/    FastAPI + SQLAlchemy + Alembic. Scrapers, aggregators, ingest, worker
 frontend/   Next.js + TypeScript dashboard
 ```
 
@@ -29,8 +29,8 @@ AUTO_CREATE_TABLES=true
 ```
 
 For Postgres instead, `docker compose up -d db` then `alembic upgrade head`.
-`AUTO_CREATE_TABLES` must stay `false` anywhere real — production schema comes
-from Alembic.
+`AUTO_CREATE_TABLES` must stay `false` anywhere real, since production schema
+comes from Alembic.
 
 ```bash
 uvicorn app.main:app --reload    # API on :8000, OpenAPI at /docs
@@ -80,7 +80,7 @@ this stays a one-file change:
    `provider = ATSProvider.<name>`, decorate it with `@register`, and implement
    `fetch_jobs` to return `NormalizedJob` objects. Scrapers never touch the
    database.
-2. Import it in `backend/app/scrapers/__init__.py` — that import is what
+2. Import it in `backend/app/scrapers/__init__.py`. That import is what
    registers it.
 3. Add companies using that provider.
 
