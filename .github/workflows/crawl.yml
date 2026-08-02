@@ -4,9 +4,14 @@ name: Crawl jobs
 # Requires a repo secret DATABASE_URL = your Render EXTERNAL database URL.
 on:
   schedule:
-    # Four runs/day keeps postings reasonably fresh without exhausting the
-    # 2,000 monthly GitHub Actions minutes included with a private repo.
-    - cron: "17 */6 * * *"   # every 6 hours
+    # Eight runs/day. The old four were a budget decision, not a product one:
+    # the 2,000 monthly minutes that come with a private repo could not cover
+    # more. This repo is public, where standard runners are unmetered, so the
+    # only real limits now are politeness to the ATS APIs (already handled by
+    # the per-host throttle in scrapers/http.py) and write load on a free
+    # Postgres. Worth tightening further once a real run confirms how long a
+    # sweep actually takes.
+    - cron: "17 */3 * * *"   # every 3 hours
   workflow_dispatch: {}       # allows manual runs from the Actions tab
 
 concurrency:

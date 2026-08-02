@@ -1,22 +1,28 @@
 """Crawl orchestration: iterate companies, dispatch to the right scraper,
 hand results to ingest, and record a CrawlRun for observability.
 
-Phase 1 runs in-process. The per-company unit of work is intentionally
-self-contained so it can later become a queue task with no changes to ingest.
+Companies are crawled concurrently, each on its own session. The per-company
+unit of work is intentionally self-contained so it can later become a queue
+task with no changes to ingest.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
+from collections.abc import Callable
 from datetime import datetime, timezone
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import get_settings
+from app.database import SessionLocal
 from app.models import Company, CrawlRun
-from app.scrapers.base import CompanyRef, get_scraper
+from app.scrapers.base import CompanyRef, get_scraper, supported_providers
 from app.services.ingest import ingest_jobs
 
 logger = logging.getLogger(__name__)
+settings = get_settings()
 
 
 async def crawl_company(session: AsyncSession, company: Company) -> CrawlRun:
@@ -52,11 +58,74 @@ async def crawl_company(session: AsyncSession, company: Company) -> CrawlRun:
     return run
 
 
-async def crawl_all(session: AsyncSession) -> list[CrawlRun]:
-    companies = (
-        await session.execute(select(Company).where(Company.active.is_(True)))
+async def _crawl_one(
+    company_id: int,
+    sem: asyncio.Semaphore,
+    session_factory: Callable[[], AsyncSession],
+) -> CrawlRun | None:
+    """Crawl one company on a session of its own.
+
+    A session is not safe to share across concurrent tasks, so each company
+    gets one. The semaphore bounds how many are open at once, which matters on
+    a small managed Postgres where the connection limit is low.
+    """
+    async with sem:
+        async with session_factory() as session:
+            company = await session.get(Company, company_id)
+            if company is None:  # deleted between listing and crawling
+                return None
+            return await crawl_company(session, company)
+
+
+async def crawl_all(
+    session: AsyncSession,
+    *,
+    session_factory: Callable[[], AsyncSession] | None = None,
+) -> list[CrawlRun]:
+    """Crawl every active company that a registered scraper can actually fetch.
+
+    The provider filter is load-bearing. Aggregator ingestion creates a Company
+    row per employer in a feed (adzuna, themuse, jobicy, remotive), and those
+    providers have no scraper by design — the jobs arrive through
+    services/aggregate.py instead. Without the filter every one of them is
+    dispatched here, raises KeyError from get_scraper, and costs a failed
+    CrawlRun row plus two round trips. In production that was 1,243 of 1,409
+    companies and about a third of the wall time of every crawl.
+
+    `session_factory` exists so tests can supply their own engine; production
+    callers leave it unset.
+    """
+    factory = session_factory or SessionLocal
+    crawlable = supported_providers()
+
+    company_ids = (
+        await session.execute(
+            select(Company.id).where(
+                Company.active.is_(True),
+                Company.ats_provider.in_(crawlable),
+            )
+        )
     ).scalars().all()
-    runs = []
-    for company in companies:
-        runs.append(await crawl_company(session, company))
+
+    logger.info(
+        "crawling %d companies across %d providers, concurrency %d",
+        len(company_ids),
+        len(crawlable),
+        settings.crawl_concurrency,
+    )
+
+    sem = asyncio.Semaphore(settings.crawl_concurrency)
+    results = await asyncio.gather(
+        *(_crawl_one(cid, sem, factory) for cid in company_ids),
+        return_exceptions=True,
+    )
+
+    runs: list[CrawlRun] = []
+    for result in results:
+        if isinstance(result, BaseException):
+            # crawl_company swallows scraper failures, so reaching here means
+            # the session itself failed. Log and keep the rest of the sweep.
+            logger.error("crawl task crashed", exc_info=result)
+        elif result is not None:
+            runs.append(result)
     return runs

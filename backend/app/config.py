@@ -45,6 +45,13 @@ class Settings(BaseSettings):
     # How long a freshly discovered job stays flagged is_new (hours).
     new_job_window_hours: int = 48
 
+    # How many companies to crawl at once. Each one holds a database session,
+    # so keep this comfortably under the managed Postgres connection limit
+    # (Render's free tier is small). The crawl is dominated by round trips to
+    # the database rather than by CPU, so concurrency buys a lot here; the
+    # per-host throttle in scrapers/http.py still paces the ATS APIs.
+    crawl_concurrency: int = 6
+
     # Workday has no listing-level detail, so we fetch each job's detail page.
     # Cap how many per company per crawl to bound request volume.
     workday_max_jobs: int = 200
