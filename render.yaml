@@ -1,20 +1,23 @@
-# Render Blueprint — provisions Postgres + FastAPI API + crawler cron.
-# On Render: New → Blueprint → connect this repo. Render reads this file.
+# Render Blueprint: provisions the FastAPI web service only.
+# On Render: New -> Blueprint -> connect this repo. Render reads this file.
 #
-# Free-tier notes (read before deploying):
-#   * Postgres "free" has size/retention limits — upgrade for anything durable.
+# The database is deliberately NOT provisioned here. Render's free Postgres is
+# deleted 30 days after it is created, and that is a countdown from creation,
+# not an inactivity timeout: the crawler was writing to it hourly and it expired
+# regardless, taking every job and all 326 discovered company boards with it.
+# Nothing in this application is Render-specific, so the database lives with a
+# provider whose free tier does not expire, and DATABASE_URL is set by hand in
+# the dashboard.
+#
+# Free-tier notes:
 #   * The free web service sleeps after ~15 min idle and cold-starts on request.
-#   * Migrations run at container start (works on free tier, where the paid-only
-#     preDeployCommand is unavailable).
+#     .github/workflows/keep-warm.yml mitigates this.
+#   * Migrations run at container start, since the paid-only preDeployCommand is
+#     unavailable here. Note the consequence: if migrations cannot reach the
+#     database, gunicorn never starts and the API is down rather than degraded.
 #
-# The crawler does NOT run here — it runs for free via GitHub Actions
-# (.github/workflows/crawl.yml), which connects to this database directly.
-
-databases:
-  - name: jobscraper-db
-    databaseName: jobscraper
-    user: jobs
-    plan: free
+# The crawler does NOT run here. It runs for free via GitHub Actions
+# (.github/workflows/crawl.yml), which connects to the same database directly.
 
 services:
   - type: web
@@ -27,10 +30,10 @@ services:
     healthCheckPath: /health
     autoDeploy: true
     envVars:
+      # Set in the Render dashboard. asyncpg ignores libpq's sslmode parameter,
+      # so a managed URL carrying ?sslmode=require is rewritten in app/config.py.
       - key: DATABASE_URL
-        fromDatabase:
-          name: jobscraper-db
-          property: connectionString
+        sync: false
       - key: AUTO_CREATE_TABLES
         value: "false"
       - key: ENVIRONMENT

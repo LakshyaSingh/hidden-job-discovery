@@ -77,10 +77,25 @@ function toQuery(filters: JobFilters): string {
 }
 
 export async function fetchJobs(filters: JobFilters): Promise<JobList> {
-  const res = await fetch(`${API_URL}/jobs?${toQuery(filters)}`, {
-    cache: "no-store",
-  });
-  if (!res.ok) throw new Error(`fetchJobs failed: ${res.status}`);
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}/jobs?${toQuery(filters)}`, {
+      cache: "no-store",
+    });
+  } catch {
+    // fetch only rejects when the request never completed: DNS failure, the
+    // server refusing the connection, a CORS block, or the browser being
+    // offline. The thrown TypeError says only "Failed to fetch", so name the
+    // host to make it diagnosable from a screenshot.
+    throw new Error(`No response from ${API_URL}. It may be down or waking up.`);
+  }
+  if (!res.ok) {
+    throw new Error(
+      res.status >= 500
+        ? `The API returned ${res.status}. It is probably still starting up.`
+        : `The API rejected the request (${res.status}).`,
+    );
+  }
   return res.json();
 }
 

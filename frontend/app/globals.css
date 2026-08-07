@@ -475,6 +475,32 @@ select.control {
   font-weight: 500;
 }
 
+/* Distinct from .empty on purpose. "No jobs match your filters" and "the API is
+   down" are different situations, and rendering them identically is what let a
+   five-day outage read as a normal search result. */
+.error-state {
+  max-width: 42ch;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  padding: 32px 28px;
+}
+
+.error-state p {
+  margin: 12px 0 0;
+  font-size: 15px;
+}
+
+.error-state .error-detail {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  font-size: 12.5px;
+  color: var(--muted);
+  word-break: break-word;
+}
+
+.error-state .btn {
+  margin-top: 22px;
+}
+
 /* ---- Motion ----------------------------------------------------------
    Opacity only. A transform here would create a containing block that the
    nav bar's backdrop-filter cannot sample through. */

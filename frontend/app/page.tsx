@@ -23,6 +23,10 @@ export default function Dashboard() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [crawling, setCrawling] = useState(false);
+  // A failed request used to be swallowed and rendered as an empty result set,
+  // so an API that was down for five days looked exactly like a search that
+  // matched nothing. The two need to be distinguishable.
+  const [error, setError] = useState<string | null>(null);
   // Separate input state so typing is instant; the query only fires after a
   // short pause (debounce) instead of once per keystroke.
   const [searchText, setSearchText] = useState("");
@@ -39,10 +43,16 @@ export default function Dashboard() {
       if (myId !== reqSeq.current) return; // a newer request superseded us
       setJobs(data.items);
       setTotal(data.total);
-    } catch {
+      setError(null);
+    } catch (e) {
       if (myId !== reqSeq.current) return;
       setJobs([]);
       setTotal(0);
+      setError(
+        e instanceof Error && e.message
+          ? e.message
+          : "Could not reach the API.",
+      );
     } finally {
       if (myId === reqSeq.current) setLoading(false);
     }
@@ -75,6 +85,12 @@ export default function Dashboard() {
     try {
       await triggerCrawl();
       await load();
+    } catch (e) {
+      // Without this the rejection was unhandled and the button just stopped
+      // spinning, with the reason visible only in the browser console.
+      setError(
+        e instanceof Error && e.message ? e.message : "Could not start a crawl.",
+      );
     } finally {
       setCrawling(false);
     }
@@ -241,11 +257,27 @@ export default function Dashboard() {
         <div className="results-head">
           {loading
             ? "Loading"
-            : `${total.toLocaleString()} ${total === 1 ? "role" : "roles"}`}
+            : error
+              ? "Unavailable"
+              : `${total.toLocaleString()} ${total === 1 ? "role" : "roles"}`}
         </div>
 
         <div className="results">
-          {!loading && jobs.length === 0 && (
+          {!loading && error && (
+            <div className="empty error-state" role="alert">
+              <b>Could not reach the job database.</b>
+              <p>
+                This is a problem on our side, not an empty search. Your filters
+                are still applied and nothing has been lost.
+              </p>
+              <p className="error-detail">{error}</p>
+              <button className="btn ghost" onClick={load}>
+                Try again
+              </button>
+            </div>
+          )}
+
+          {!loading && !error && jobs.length === 0 && (
             <div className="empty">
               {hasFilters ? (
                 <>
@@ -255,8 +287,8 @@ export default function Dashboard() {
                 </>
               ) : (
                 <>
-                  No jobs yet. The crawler runs automatically every 30&nbsp;minutes,
-                  so check back shortly or click <b>Run crawl</b>.
+                  No jobs yet. The crawler runs automatically every hour, so
+                  check back shortly or click <b>Run crawl</b>.
                 </>
               )}
             </div>
