@@ -2,9 +2,26 @@
 from __future__ import annotations
 
 from functools import lru_cache
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Hosts where TLS is not expected: a local or docker-compose Postgres serves no
+# certificate, so requiring it would break local development.
+_LOCAL_DB_HOSTS = {"localhost", "127.0.0.1", "::1", "db", ""}
+
+# libpq's sslmode values mapped onto the ones asyncpg accepts. asyncpg has no
+# equivalent of "allow" (try plaintext first, then TLS); "prefer" is the
+# closest, and errs toward encryption.
+_SSLMODE_TO_ASYNCPG = {
+    "disable": "disable",
+    "allow": "prefer",
+    "prefer": "prefer",
+    "require": "require",
+    "verify-ca": "verify-ca",
+    "verify-full": "verify-full",
+}
 
 
 class Settings(BaseSettings):
@@ -18,14 +35,42 @@ class Settings(BaseSettings):
     @field_validator("database_url")
     @classmethod
     def _use_async_driver(cls, v: str) -> str:
-        """Managed Postgres hosts (Render, Neon, Heroku, Supabase) hand out
-        `postgres://` or `postgresql://` URLs. SQLAlchemy's async engine needs
-        the asyncpg driver, so normalize the scheme automatically."""
+        """Normalize a managed-Postgres URL for asyncpg.
+
+        Two adjustments, both because the URLs these providers hand out are
+        written for libpq rather than for asyncpg:
+
+        1. Scheme. Render, Neon, Heroku and Supabase all give out
+           `postgres://` or `postgresql://`; SQLAlchemy's async engine needs
+           the `postgresql+asyncpg://` driver.
+
+        2. TLS. libpq spells this `sslmode`, asyncpg spells it `ssl`, and
+           asyncpg silently ignores the parameter it does not recognize, so a
+           URL ending `?sslmode=require` connects in plaintext. Managed
+           Postgres rejects that with "SSL/TLS required", which takes down
+           every process that touches the database at once. Any non-local host
+           therefore gets `ssl=require` unless the URL asks for something else.
+           Local hosts are left alone: a docker-compose Postgres has no
+           certificate, and requiring TLS there would break local development.
+        """
         if v.startswith("postgres://"):
             v = "postgresql://" + v[len("postgres://"):]
         if v.startswith("postgresql://"):
             v = "postgresql+asyncpg://" + v[len("postgresql://"):]
-        return v
+        if not v.startswith("postgresql+asyncpg://"):
+            return v  # SQLite and friends need none of this
+
+        parts = urlsplit(v)
+        params = dict(parse_qsl(parts.query, keep_blank_values=True))
+
+        sslmode = params.pop("sslmode", None)
+        if "ssl" not in params:
+            if sslmode:
+                params["ssl"] = _SSLMODE_TO_ASYNCPG.get(sslmode, sslmode)
+            elif (parts.hostname or "") not in _LOCAL_DB_HOSTS:
+                params["ssl"] = "require"
+
+        return urlunsplit(parts._replace(query=urlencode(params)))
 
     # "development" enables conveniences like auto-creating tables on startup.
     # In "production" the app relies on Alembic migrations instead.
