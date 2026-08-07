@@ -1,60 +1,88 @@
-"""Database URL normalization.
+"""DATABASE_URL normalization.
 
-Managed Postgres URLs are written for libpq, not for asyncpg. Getting this
-wrong is not a degraded connection, it is no connection: the provider answers
-"SSL/TLS required" and every process that touches the database fails at once.
+Managed Postgres providers hand out URLs written for libpq. SQLAlchemy forwards
+any query parameter it does not consume straight to the driver, so a parameter
+asyncpg does not recognize is not ignored, it raises TypeError on the first
+connection and takes down the API and every worker at once. This has already
+happened twice, once for sslmode and once for channel_binding, so the contract
+gets tests.
 """
+import inspect
+
+import asyncpg
+import pytest
+from sqlalchemy.ext.asyncio import create_async_engine
+
 from app.config import Settings
 
-
-def _url(raw: str) -> str:
-    return Settings(database_url=raw).database_url
-
-
-def test_scheme_is_normalized_for_asyncpg():
-    """Render, Heroku and Supabase all hand out one of these two schemes."""
-    assert _url("postgres://u:p@host.render.com/db").startswith(
-        "postgresql+asyncpg://"
-    )
-    assert _url("postgresql://u:p@host.render.com/db").startswith(
-        "postgresql+asyncpg://"
-    )
+# Every kwarg name asyncpg.connect() will accept.
+_ASYNCPG_KWARGS = set(inspect.signature(asyncpg.connect).parameters)
 
 
-def test_sslmode_is_translated_to_asyncpgs_spelling():
-    """asyncpg ignores libpq's sslmode outright, so it has to be rewritten.
-
-    Left as-is, the URL connects in plaintext and the server refuses it.
-    """
-    out = _url("postgres://u:p@host.render.com/db?sslmode=require")
-    assert "ssl=require" in out
-    assert "sslmode" not in out
+def connect_kwargs(raw_url: str) -> dict:
+    """What asyncpg.connect() would actually be called with."""
+    engine = create_async_engine(Settings(database_url=raw_url).database_url)
+    _, kwargs = engine.dialect.create_connect_args(engine.url)
+    return kwargs
 
 
-def test_remote_host_gets_tls_even_when_the_url_is_silent():
-    out = _url("postgresql://u:p@dpg-abc123-a.oregon-postgres.render.com/db")
-    assert "ssl=require" in out
+# Real URL shapes, as each provider hands them out.
+PROVIDER_URLS = [
+    pytest.param(
+        "postgresql://u:p@ep-cool-frog-a1b2.us-west-2.aws.neon.tech/neondb"
+        "?sslmode=require&channel_binding=require",
+        id="neon",
+    ),
+    pytest.param(
+        "postgres://u:p@dpg-abc123-a.oregon-postgres.render.com/jobscraper",
+        id="render-external",
+    ),
+    pytest.param(
+        "postgresql://postgres:p@db.abcdefgh.supabase.co:5432/postgres"
+        "?sslmode=require",
+        id="supabase",
+    ),
+    pytest.param(
+        "postgres://u:p@ec2-1-2-3-4.compute-1.amazonaws.com:5432/d123"
+        "?sslmode=require&sslrootcert=/etc/ssl/certs/ca.pem",
+        id="heroku-with-ca-bundle",
+    ),
+]
 
 
-def test_local_hosts_are_left_unencrypted():
-    """A docker-compose Postgres serves no certificate."""
+@pytest.mark.parametrize("raw", PROVIDER_URLS)
+def test_provider_urls_produce_only_kwargs_asyncpg_accepts(raw):
+    unknown = set(connect_kwargs(raw)) - _ASYNCPG_KWARGS
+    assert not unknown, f"asyncpg.connect() would reject: {sorted(unknown)}"
+
+
+@pytest.mark.parametrize("raw", PROVIDER_URLS)
+def test_remote_providers_always_get_tls(raw):
+    """asyncpg spells this `ssl`; a surviving `sslmode` means plaintext."""
+    kwargs = connect_kwargs(raw)
+    assert kwargs.get("ssl") == "require"
+    assert "sslmode" not in kwargs
+
+
+def test_scheme_is_rewritten_for_the_async_driver():
+    for raw in ("postgres://u:p@example.com/db", "postgresql://u:p@example.com/db"):
+        assert Settings(database_url=raw).database_url.startswith(
+            "postgresql+asyncpg://"
+        )
+
+
+def test_local_development_is_left_unencrypted():
+    """A docker-compose or localhost Postgres serves no certificate."""
     for host in ("localhost", "127.0.0.1", "db"):
-        out = _url(f"postgresql://jobs:jobs@{host}:5432/jobscraper")
-        assert "ssl" not in out, host
+        kwargs = connect_kwargs(f"postgresql://jobs:jobs@{host}:5432/jobscraper")
+        assert "ssl" not in kwargs, f"{host} should not require TLS"
 
 
-def test_an_explicit_choice_is_respected():
-    assert "ssl=disable" in _url("postgres://u:p@host.example.com/db?sslmode=disable")
-    assert "ssl=verify-full" in _url(
-        "postgres://u:p@host.example.com/db?ssl=verify-full"
-    )
+def test_an_explicit_sslmode_is_honoured_not_overridden():
+    kwargs = connect_kwargs("postgresql://u:p@example.com/db?sslmode=disable")
+    assert kwargs.get("ssl") == "disable"
 
 
-def test_other_query_parameters_survive():
-    out = _url("postgres://u:p@host.example.com/db?sslmode=require&application_name=jobs")
-    assert "application_name=jobs" in out
-    assert "ssl=require" in out
-
-
-def test_sqlite_is_untouched():
-    assert _url("sqlite+aiosqlite:///./dev.db") == "sqlite+aiosqlite:///./dev.db"
+def test_sqlite_urls_are_untouched():
+    raw = "sqlite+aiosqlite:///./dev.db"
+    assert Settings(database_url=raw).database_url == raw

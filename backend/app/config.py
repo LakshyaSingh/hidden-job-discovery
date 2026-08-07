@@ -23,6 +23,28 @@ _SSLMODE_TO_ASYNCPG = {
     "verify-full": "verify-full",
 }
 
+# libpq parameters that asyncpg's connect() does not accept as keyword
+# arguments. SQLAlchemy forwards every query parameter it does not consume
+# straight to the driver, so one of these left in the URL raises TypeError on
+# the very first connection, taking down the API and every worker at once.
+#
+# Managed providers append them freely: Neon hands out URLs ending
+# `?sslmode=require&channel_binding=require`, and the ssl* family appears
+# wherever a provider pins its own CA bundle. Dropping those is safe here
+# because `ssl=require` still encrypts the connection; it just does not verify
+# the server certificate against a specific root.
+_LIBPQ_ONLY_PARAMS = frozenset(
+    {
+        "channel_binding",
+        "gssencmode",
+        "options",
+        "sslcert",
+        "sslcrl",
+        "sslkey",
+        "sslrootcert",
+    }
+)
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
@@ -69,6 +91,9 @@ class Settings(BaseSettings):
                 params["ssl"] = _SSLMODE_TO_ASYNCPG.get(sslmode, sslmode)
             elif (parts.hostname or "") not in _LOCAL_DB_HOSTS:
                 params["ssl"] = "require"
+
+        for key in _LIBPQ_ONLY_PARAMS:
+            params.pop(key, None)
 
         return urlunsplit(parts._replace(query=urlencode(params)))
 
