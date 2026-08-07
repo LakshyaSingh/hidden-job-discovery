@@ -112,7 +112,6 @@ async def _crawl_one(
 
 
 async def crawl_all(
-    session: AsyncSession,
     *,
     session_factory: Callable[[], AsyncSession] | None = None,
 ) -> list[CrawlRun]:
@@ -126,20 +125,29 @@ async def crawl_all(
     CrawlRun row plus two round trips. In production that was 1,243 of 1,409
     companies and about a third of the wall time of every crawl.
 
+    Takes no session, deliberately. The listing query below runs on a session
+    of its own that is closed immediately, because the sweep that follows takes
+    tens of minutes and every task uses its own session anyway. Holding the
+    caller's connection open across all of that gets it dropped as idle by a
+    managed Postgres, and the failure only surfaces at teardown, after the work
+    has succeeded, as "cannot call Transaction.rollback(): the underlying
+    connection is closed".
+
     `session_factory` exists so tests can supply their own engine; production
     callers leave it unset.
     """
     factory = session_factory or SessionLocal
     crawlable = supported_providers()
 
-    company_ids = (
-        await session.execute(
-            select(Company.id).where(
-                Company.active.is_(True),
-                Company.ats_provider.in_(crawlable),
+    async with factory() as listing:
+        company_ids = (
+            await listing.execute(
+                select(Company.id).where(
+                    Company.active.is_(True),
+                    Company.ats_provider.in_(crawlable),
+                )
             )
-        )
-    ).scalars().all()
+        ).scalars().all()
 
     logger.info(
         "crawling %d companies across %d providers, concurrency %d",

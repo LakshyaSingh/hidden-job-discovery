@@ -130,15 +130,6 @@ async def discover_companies(
     Returns {"probed", "found", "added"}."""
     slugs = candidates if candidates is not None else CANDIDATE_SLUGS
 
-    # What we already have, to skip re-adding.
-    existing = (
-        await session.execute(
-            select(Company.ats_provider, Company.ats_identifier, Company.slug)
-        )
-    ).all()
-    known_boards = {(p, i) for p, i, _ in existing}
-    known_slugs = {s for _, _, s in existing}
-
     sem = asyncio.Semaphore(_CONCURRENCY)
     async with httpx.AsyncClient(
         timeout=_TIMEOUT, follow_redirects=True,
@@ -149,6 +140,17 @@ async def discover_companies(
                 return slug, await _discover_one(client, slug)
 
         results = await asyncio.gather(*(work(s) for s in slugs))
+
+    # Read what we already have only now that the probing is done. Querying
+    # first would hold a connection open across all of the HTTP above, and a
+    # managed Postgres drops an idle connection long before that finishes.
+    existing = (
+        await session.execute(
+            select(Company.ats_provider, Company.ats_identifier, Company.slug)
+        )
+    ).all()
+    known_boards = {(p, i) for p, i, _ in existing}
+    known_slugs = {s for _, _, s in existing}
 
     found = added = 0
     for slug, hit in results:

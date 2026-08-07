@@ -264,14 +264,6 @@ async def discover_from_search(
     if not tokens:
         return {"queries": 0, "tokens": 0, "found": 0, "added": 0}
 
-    existing = (
-        await session.execute(
-            select(Company.ats_provider, Company.ats_identifier, Company.slug)
-        )
-    ).all()
-    known_boards = {(p, i) for p, i, _ in existing}
-    known_slugs = {s for _, _, s in existing}
-
     found = added = 0
     sem = asyncio.Semaphore(_CONCURRENCY)
     async with httpx.AsyncClient(
@@ -288,6 +280,17 @@ async def discover_from_search(
                 return token, hit
 
         results = await asyncio.gather(*(work(token) for token in tokens))
+
+    # Read the existing boards only after the probing. Querying up front holds
+    # a connection open across every verification request above, and a managed
+    # Postgres drops it as idle long before that finishes.
+    existing = (
+        await session.execute(
+            select(Company.ats_provider, Company.ats_identifier, Company.slug)
+        )
+    ).all()
+    known_boards = {(p, i) for p, i, _ in existing}
+    known_slugs = {s for _, _, s in existing}
 
     for token, identifier in results:
         if not identifier:

@@ -63,5 +63,5 @@ async def trigger_crawl(
             raise HTTPException(404, "company not found")
         run = await crawl_company(session, company)
         return [CrawlRunOut.model_validate(run)]
-    runs = await crawl_all(session)
+    runs = await crawl_all()
     return [CrawlRunOut.model_validate(r) for r in runs]

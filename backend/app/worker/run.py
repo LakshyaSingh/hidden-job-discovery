@@ -75,10 +75,12 @@ async def seed() -> None:
 
 async def crawl_once() -> None:
     await init_db()
-    async with SessionLocal() as session:
-        runs = await crawl_all(session)
-        total_new = sum(r.jobs_new for r in runs)
-        logger.info("crawl complete: %d runs, %d new jobs", len(runs), total_new)
+    # No session held here: crawl_all opens a short-lived one to list companies
+    # and gives every task its own. A connection held across the whole sweep
+    # gets dropped as idle by a managed Postgres.
+    runs = await crawl_all()
+    total_new = sum(r.jobs_new for r in runs)
+    logger.info("crawl complete: %d runs, %d new jobs", len(runs), total_new)
 
 
 async def crawl_loop(interval: int) -> None:

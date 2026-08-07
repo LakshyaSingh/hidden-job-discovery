@@ -67,7 +67,7 @@ async def test_crawl_skips_providers_without_a_scraper(
     )
     await session.commit()
 
-    runs = await crawl_service.crawl_all(session, session_factory=session_factory)
+    runs = await crawl_service.crawl_all(session_factory=session_factory)
 
     assert sorted(stub_scraper) == ["ramp-ashby", "stripe-greenhouse"]
     assert {r.provider for r in runs} == {ATSProvider.greenhouse, ATSProvider.ashby}
@@ -86,7 +86,7 @@ async def test_crawl_skips_inactive_companies(session, session_factory, stub_scr
     session.add_all([active, inactive])
     await session.commit()
 
-    await crawl_service.crawl_all(session, session_factory=session_factory)
+    await crawl_service.crawl_all(session_factory=session_factory)
 
     assert stub_scraper == ["stripe-greenhouse"]
 
@@ -114,7 +114,7 @@ async def test_crawl_is_concurrent_and_isolates_failures(
     )
     await session.commit()
 
-    runs = await crawl_service.crawl_all(session, session_factory=session_factory)
+    runs = await crawl_service.crawl_all(session_factory=session_factory)
 
     assert len(runs) == 3
     failed = [r for r in runs if not r.ok]
@@ -143,14 +143,14 @@ async def test_dead_board_is_deactivated_after_repeated_404s(
     await session.commit()
 
     for expected in range(1, crawl_service.DEAD_BOARD_THRESHOLD + 1):
-        await crawl_service.crawl_all(session, session_factory=session_factory)
+        await crawl_service.crawl_all(session_factory=session_factory)
         await session.refresh(company)
         assert company.consecutive_missing == expected
 
     assert company.active is False
 
     # Deactivated companies drop out of the sweep entirely.
-    runs = await crawl_service.crawl_all(session, session_factory=session_factory)
+    runs = await crawl_service.crawl_all(session_factory=session_factory)
     assert runs == []
 
 
@@ -169,7 +169,7 @@ async def test_transient_errors_never_retire_a_board(
     await session.commit()
 
     for _ in range(crawl_service.DEAD_BOARD_THRESHOLD + 2):
-        await crawl_service.crawl_all(session, session_factory=session_factory)
+        await crawl_service.crawl_all(session_factory=session_factory)
 
     await session.refresh(company)
     assert company.consecutive_missing == 0
@@ -185,12 +185,12 @@ async def test_a_recovered_board_resets_its_counter(
 
     monkeypatch.setattr(crawl_service, "get_scraper", lambda provider: _Gone())
     for _ in range(3):
-        await crawl_service.crawl_all(session, session_factory=session_factory)
+        await crawl_service.crawl_all(session_factory=session_factory)
     await session.refresh(company)
     assert company.consecutive_missing == 3
     assert company.active is True  # still under the threshold
 
     monkeypatch.setattr(crawl_service, "get_scraper", lambda provider: _StubScraper([]))
-    await crawl_service.crawl_all(session, session_factory=session_factory)
+    await crawl_service.crawl_all(session_factory=session_factory)
     await session.refresh(company)
     assert company.consecutive_missing == 0
