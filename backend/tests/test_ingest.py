@@ -141,3 +141,52 @@ async def test_empty_fetch_does_not_close(session):
         await session.execute(select(Job).where(Job.external_id == "7"))
     ).scalar_one()
     assert row.status == JobStatus.open
+
+
+async def test_recrawl_never_reads_the_description_column(session):
+    """Egress guard, invisible to behavioural tests.
+
+    Every crawl re-reads every posting it already has, and the stale-close
+    sweep re-reads every open posting per company. When those selected whole
+    rows they dragged the description text back out of the database each time,
+    which on a managed Postgres is billed egress and reached gigabytes a day.
+    description is written but never read, so nothing should ever select it.
+    """
+    from sqlalchemy import event
+
+    company = Company(
+        name="Acme", slug="acme", ats_provider=ATSProvider.greenhouse,
+        ats_identifier="acme",
+    )
+    session.add(company)
+    await session.commit()
+
+    posting = NormalizedJob(
+        external_id="j1",
+        title="Software Engineer",
+        apply_url="https://example.com/j1",
+        company_name="Acme",
+        location_raw="Austin, TX",
+        description="x" * 20_000,
+    )
+    await ingest_jobs(session, company, [posting])
+
+    selects: list[str] = []
+    engine = session.sync_session.get_bind()
+
+    @event.listens_for(engine, "before_cursor_execute")
+    def _capture(conn, cursor, statement, params, context, executemany):
+        if statement.lstrip().upper().startswith("SELECT"):
+            selects.append(statement)
+
+    try:
+        # Re-crawl: same posting, unchanged, plus one that vanished.
+        await ingest_jobs(session, company, [posting])
+    finally:
+        event.remove(engine, "before_cursor_execute", _capture)
+
+    assert selects, "expected the re-crawl to query something"
+    offenders = [s for s in selects if "description" in s.lower()]
+    assert not offenders, (
+        "a SELECT still reads jobs.description:\n" + "\n".join(offenders)
+    )

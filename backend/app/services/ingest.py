@@ -12,8 +12,9 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import defer
 
 from app.config import get_settings
 from app.models import Company, DateSource, Job, JobStatus
@@ -114,12 +115,18 @@ async def ingest_jobs(
             salary_max=nj.salary_max,
         )
 
+        # description is deferred: it is the largest column in the table and is
+        # only ever assigned below, never read. Change detection compares
+        # content_hash instead. Loading it here meant every crawl dragged every
+        # posting's full text back out of the database for nothing.
         existing = (
             await session.execute(
-                select(Job).where(
+                select(Job)
+                .where(
                     Job.company_id == company.id,
                     Job.external_id == nj.external_id,
                 )
+                .options(defer(Job.description))
             )
         ).scalar_one_or_none()
 
@@ -218,14 +225,18 @@ async def ingest_jobs(
     # sweep is now closed. Guard against a partial/failed fetch (a transient
     # error or rate-limit) wiping the board: if this run saw far fewer jobs than
     # we currently have open, skip closing and keep the existing rows.
-    open_jobs = (
+    # Only the identifier columns are needed to decide what to close. Selecting
+    # whole rows pulled every open posting's description out of the database on
+    # every single crawl, for every company, which is what put the egress bill
+    # into gigabytes a day.
+    open_rows = (
         await session.execute(
-            select(Job).where(
+            select(Job.id, Job.external_id).where(
                 Job.company_id == company.id, Job.status == JobStatus.open
             )
         )
-    ).scalars().all()
-    open_count = len(open_jobs)
+    ).all()
+    open_count = len(open_rows)
     suspicious = stats.seen == 0 or (open_count > 4 and stats.seen < open_count * 0.5)
     if not close_stale:
         pass  # aggregator slice — never infer removal from a partial view
@@ -236,11 +247,22 @@ async def ingest_jobs(
             company.name, stats.seen, open_count,
         )
     else:
-        for job in open_jobs:
-            if job.external_id not in seen_external_ids:
-                job.status = JobStatus.closed
-                job.is_new = False
-                stats.closed += 1
+        stale_ids = [
+            job_id
+            for job_id, external_id in open_rows
+            if external_id not in seen_external_ids
+        ]
+        if stale_ids:
+            # A set-based UPDATE rather than mutating loaded objects. These
+            # rows were not seen this sweep, so none of them is in the session
+            # and nothing needs synchronizing back.
+            result = await session.execute(
+                update(Job)
+                .where(Job.id.in_(stale_ids))
+                .values(status=JobStatus.closed, is_new=False)
+                .execution_options(synchronize_session=False)
+            )
+            stats.closed = result.rowcount or len(stale_ids)
 
     await session.commit()
     logger.info(
