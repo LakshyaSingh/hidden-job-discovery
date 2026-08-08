@@ -4,12 +4,16 @@ name: Crawl jobs
 # Requires a repo secret DATABASE_URL = your Render EXTERNAL database URL.
 on:
   schedule:
-    # Hourly. A sweep took 76 minutes while the crawler was still dispatching
-    # companies that have no scraper; measured at 6m15s afterwards, so an
-    # hourly cron costs ~150 unmetered minutes a day on a public repo and
-    # cannot overlap itself. Politeness to the ATS APIs comes from the
-    # per-host throttle in scrapers/http.py, not from the schedule.
-    - cron: "17 * * * *"   # hourly
+    # Every six hours. Runner minutes are unmetered on a public repo, so the
+    # binding constraint is not compute but the database's egress allowance:
+    # a sweep re-reads every posting it already holds, and at ~54,000 postings
+    # even the narrow columns ingest now selects come to a few MB per sweep.
+    # Hourly worked out at roughly 4 GB a month against a 5 GB allowance,
+    # which is not enough margin to also serve the site. Raise this only
+    # against a measured egress figure, not an estimate: guessing wrong costs
+    # a month of downtime, because exceeding the quota blocks the database
+    # outright rather than throttling it.
+    - cron: "17 */6 * * *"   # every 6 hours
   workflow_dispatch: {}       # allows manual runs from the Actions tab
 
 concurrency:

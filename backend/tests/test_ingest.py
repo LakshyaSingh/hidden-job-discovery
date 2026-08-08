@@ -186,7 +186,19 @@ async def test_recrawl_never_reads_the_description_column(session):
         event.remove(engine, "before_cursor_execute", _capture)
 
     assert selects, "expected the re-crawl to query something"
+
+    # Nothing may read the description text.
     offenders = [s for s in selects if "description" in s.lower()]
     assert not offenders, (
         "a SELECT still reads jobs.description:\n" + "\n".join(offenders)
     )
+
+    # Nor any of the other wide columns. These are written on every sighting
+    # but never read, and a crawl re-reads the whole corpus, so each one costs
+    # its width times the number of postings, every hour.
+    for column in ("apply_url", "careers_url", "location_raw", "skills",
+                   "title_normalized"):
+        leaking = [s for s in selects if f"jobs.{column}" in s.lower()]
+        assert not leaking, (
+            f"a SELECT still reads jobs.{column}:\n" + "\n".join(leaking)
+        )

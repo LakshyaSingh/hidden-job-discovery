@@ -14,7 +14,7 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import defer
+from sqlalchemy.orm import load_only
 
 from app.config import get_settings
 from app.models import Company, DateSource, Job, JobStatus
@@ -115,10 +115,12 @@ async def ingest_jobs(
             salary_max=nj.salary_max,
         )
 
-        # description is deferred: it is the largest column in the table and is
-        # only ever assigned below, never read. Change detection compares
-        # content_hash instead. Loading it here meant every crawl dragged every
-        # posting's full text back out of the database for nothing.
+        # Fetch only the columns the decision below actually reads. Everything
+        # else on the row is written, never read, and a column that is not
+        # loaded can still be assigned. This is billed egress on a managed
+        # Postgres and it runs once per posting per crawl, so the row here
+        # needs to stay as narrow as the logic allows: about seventy bytes
+        # rather than the whole posting.
         existing = (
             await session.execute(
                 select(Job)
@@ -126,7 +128,16 @@ async def ingest_jobs(
                     Job.company_id == company.id,
                     Job.external_id == nj.external_id,
                 )
-                .options(defer(Job.description))
+                .options(
+                    load_only(
+                        Job.content_hash,
+                        Job.is_new,
+                        Job.original_posted_at,
+                        Job.first_discovered_at,
+                        Job.min_experience,
+                        Job.max_experience,
+                    )
+                )
             )
         ).scalar_one_or_none()
 
